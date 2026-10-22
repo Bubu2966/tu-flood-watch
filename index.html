@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
+<title>TU Flood Watch — แผนที่ 3 มิติแจ้งเตือนน้ำขัง มธ. ศูนย์รังสิต</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=Prompt:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root{
+    --bg:#070b12;
+    --ink:#eef3fb; --ink-2:#a9b6ca; --ink-3:#6c7a92;
+    --glass:rgba(12,18,29,0.74); --glass-solid:#0e1521;
+    --line:rgba(255,255,255,0.08); --line-2:rgba(255,255,255,0.15);
+    --aqua:#38e1ff; --aqua-2:#0ea5e9; --tu:#E2231A; --rose:#ff3d5a; --ok:#34d399;
+    --r-xl:24px; --r-lg:18px; --r-md:14px; --r-sm:10px;
+    --shadow:0 30px 60px -22px rgba(0,0,0,0.7);
+    --sheet-w:410px;
+    --peek:230px;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none !important;}
+  html,body{margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:'IBM Plex Sans Thai',system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  button{font-family:inherit; color:inherit;}
+  h1,h2,h3{font-family:'Prompt',sans-serif; margin:0; font-weight:600;}
+  :focus-visible{outline:2px solid var(--aqua); outline-offset:2px;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+
+  #map{position:fixed; inset:0;}
+  .vignette{position:fixed; inset:0; pointer-events:none; z-index:1;
+    background:radial-gradient(120% 95% at 62% 42%, transparent 55%, rgba(4,7,12,0.7) 100%);}
+  .glass{background:var(--glass); backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%);
+    border:1px solid var(--line); box-shadow:var(--shadow);}
+  .ico{display:inline-grid; place-items:center; line-height:0;}
+  /* โหมดประหยัดเครื่อง: blur ทับแผนที่ 3 มิติกินแรง GPU มากบนมือถือ/iPad */
+  html.lite .glass{backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(12,18,29,0.95);}
+  html.lite .backdrop{backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(3,6,10,0.72);}
+  html.lite .vignette{display:none;}
+  html.lite .pin{filter:none;}
+  html.lite .pin-body{box-shadow:0 4px 8px rgba(0,0,0,0.45);}
+  html.lite .pin.live::before, html.lite .fab::before, html.lite .kpi::after{animation:none; display:none;}
+  html.lite .alert.hot .alert-ic{animation:none;}
+
+  /* ---------- Splash ---------- */
+  #splash{position:fixed; inset:0; z-index:100; display:grid; place-items:center;
+    background:radial-gradient(800px 500px at 50% 40%, #0d2236 0%, var(--bg) 70%); transition:opacity .8s ease, visibility .8s;}
+  #splash.out{opacity:0; visibility:hidden;}
+  .splash-inner{text-align:center; padding:24px;}
+  .splash-logo{position:relative; width:96px; height:96px; margin:0 auto 26px; display:grid; place-items:center;
+    border-radius:30px; background:linear-gradient(140deg, var(--aqua), var(--aqua-2) 55%, #1d4ed8); color:#04121d;
+    box-shadow:0 20px 60px -10px rgba(56,225,255,0.55);}
+  .splash-logo .ring{position:absolute; inset:-2px; border-radius:32px; border:2px solid rgba(56,225,255,0.6); animation:ring 2.2s ease-out infinite;}
+  .splash-logo .ring.r2{animation-delay:1.1s;}
+  @keyframes ring{ from{transform:scale(1); opacity:.9;} to{transform:scale(1.9); opacity:0;} }
+  #splash h1{font-size:clamp(28px,6vw,44px); font-weight:800; letter-spacing:0.12em;
+    background:linear-gradient(90deg,#fff,var(--aqua)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  #splash p{color:var(--ink-2); margin:8px 0 26px;}
+  .splash-bar{width:200px; height:3px; margin:0 auto; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden;}
+  .splash-bar i{display:block; width:40%; height:100%; background:linear-gradient(90deg,transparent,var(--aqua),transparent); animation:load 1.2s ease-in-out infinite;}
+  @keyframes load{ from{transform:translateX(-100%);} to{transform:translateX(250%);} }
+
+  /* ---------- Sheet (แผงข้อมูล) ---------- */
+  .sheet{position:fixed; z-index:10; top:16px; left:16px; bottom:16px; width:var(--sheet-w);
+    border-radius:var(--r-xl); display:flex; flex-direction:column; overflow:hidden;
+    transition:transform .5s cubic-bezier(.2,.9,.25,1);}
+  body.picking .sheet{transform:translateX(calc(-100% - 40px));}
+  .sheet-grab{padding:18px 18px 14px; flex-shrink:0;}
+  .handle{display:none; width:44px; height:5px; border-radius:9px; background:rgba(255,255,255,0.25); margin:0 auto 12px;}
+  .brand-row{display:flex; align-items:center; gap:12px;}
+  .logo{width:42px; height:42px; border-radius:13px; flex-shrink:0; display:grid; place-items:center; color:#04121d;
+    background:linear-gradient(140deg, var(--aqua), var(--aqua-2) 55%, #1d4ed8); box-shadow:0 8px 24px -6px rgba(56,225,255,0.5);}
+  .brand-txt{flex:1; min-width:0;}
+  .brand-txt h1{font-size:18px; letter-spacing:0.02em;}
+  .brand-txt p{margin:1px 0 0; font-size:12.5px; color:var(--ink-2);}
+  .live{display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; letter-spacing:0.06em;
+    padding:6px 10px; border-radius:999px; background:rgba(255,255,255,0.05); border:1px solid var(--line); color:var(--ink-3);}
+  .live i{width:7px; height:7px; border-radius:50%; background:currentColor;}
+  .live.ok{color:#4ade80;} .live.ok i{animation:blink 1.6s infinite;}
+  .live.warn{color:var(--rose);}
+  @keyframes blink{ 50%{opacity:.25;} }
+  .sheet-scroll{flex:1; overflow-y:auto; padding:2px 16px 24px; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.15) transparent;}
+  .sheet-scroll > * + *{margin-top:12px;}
+
+  @media (max-width:820px){
+    .sheet{top:auto; left:0; right:0; bottom:0; width:auto; height:92dvh; border-radius:26px 26px 0 0;
+      transform:translateY(var(--sheet-y, 60vh)); border-bottom:none;}
+    .sheet.dragging{transition:none;}
+    body.picking .sheet{transform:translateY(110%);}
+    .handle{display:block;}
+    .sheet-grab{touch-action:none; padding-top:10px; cursor:grab;}
+    .sheet-scroll{padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));}
+    .alert .chips{flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; margin-right:-14px; padding-right:14px;}
+    .alert .chip{flex-shrink:0; max-width:220px;}
+  }
+
+  /* ---------- การ์ด ---------- */
+  .card{background:rgba(255,255,255,0.035); border:1px solid var(--line); border-radius:var(--r-lg); padding:14px;}
+  .demo-pill{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px;
+    padding:9px 12px; border-radius:var(--r-md); color:#fde68a; background:rgba(250,204,21,0.1); border:1px dashed rgba(250,204,21,0.45);}
+  .demo-pill button{background:none; border:1px solid rgba(250,204,21,0.5); color:#fde68a; border-radius:999px; padding:3px 10px; cursor:pointer; font-size:12px;}
+
+  .alert{display:flex; gap:12px; align-items:flex-start; padding:14px; border-radius:var(--r-lg); border:1px solid var(--line);
+    background:rgba(255,255,255,0.035); position:relative; overflow:hidden;}
+  .alert::before{content:""; position:absolute; inset:0; opacity:.9; pointer-events:none; background:var(--alert-bg, transparent);}
+  .alert > *{position:relative;}
+  .alert-ic{width:40px; height:40px; border-radius:12px; flex-shrink:0; display:grid; place-items:center;
+    color:var(--alert-c, var(--ok)); background:color-mix(in srgb, var(--alert-c, var(--ok)) 16%, transparent);}
+  .alert.hot .alert-ic{animation:hot 1.6s ease-in-out infinite;}
+  @keyframes hot{ 50%{box-shadow:0 0 0 7px color-mix(in srgb, var(--alert-c) 18%, transparent);} }
+  .alert-body{min-width:0; flex:1;}
+  .alert-body b{display:block; font-family:'Prompt',sans-serif; font-weight:600; font-size:15px; line-height:1.35;}
+  .alert-body span{display:block; font-size:12.5px; color:var(--ink-2); margin-top:3px;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
+  .chip{display:inline-flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:4px 10px 4px 8px; border-radius:999px;
+    background:rgba(255,255,255,0.05); border:1px solid var(--line-2); max-width:100%;}
+  .chip::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--c); flex-shrink:0; box-shadow:0 0 8px var(--c);}
+  .chip span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .chip:hover{border-color:var(--c);}
+
+  .wx-top{display:flex; align-items:center; gap:12px;}
+  .wx-icon{width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#bfe9ff;
+    background:linear-gradient(140deg, rgba(56,225,255,0.22), rgba(29,78,216,0.22));}
+  .wx-temp{font-family:'Prompt',sans-serif; font-size:26px; font-weight:600; line-height:1;}
+  .wx-desc{font-size:12.5px; color:var(--ink-2); margin-top:3px;}
+  .wx-rain{margin-left:auto; text-align:right;}
+  .wx-rain b{font-family:'Prompt',sans-serif; font-size:20px; color:var(--aqua);}
+  .wx-rain span{display:block; font-size:11.5px; color:var(--ink-3);}
+  .wx-label{font-size:11.5px; color:var(--ink-3); margin:14px 0 6px; display:flex; justify-content:space-between;}
+  .wx-bars{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; height:58px; align-items:end;}
+  .wx-bar{display:flex; flex-direction:column; align-items:center; gap:4px; height:100%;}
+  .wx-bar div{flex:1; width:100%; display:flex; align-items:flex-end; border-radius:6px; background:rgba(255,255,255,0.04); overflow:hidden;}
+  .wx-bar i{display:block; width:100%; border-radius:6px; background:linear-gradient(180deg, var(--aqua), var(--aqua-2)); transition:height 1s cubic-bezier(.2,.9,.25,1);}
+  .wx-bar span{font-size:10.5px; color:var(--ink-3);}
+  .risk{display:flex; align-items:center; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-2);}
+  .risk-meter{flex:1; height:8px; border-radius:9px; background:rgba(255,255,255,0.06); overflow:hidden;}
+  .risk-meter i{display:block; height:100%; border-radius:9px; background:linear-gradient(90deg, #34d399, #facc15 55%, #f43f5e);
+    background-size:var(--rw, 300px) 100%; transition:width 1.1s cubic-bezier(.2,.9,.25,1);}
+  .risk b{font-family:'Prompt',sans-serif; font-weight:600; color:var(--risk-c, var(--ink));}
+  .muted{color:var(--ink-3); font-size:12.5px;}
+
+  .kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .kpi{padding:12px; border-radius:var(--r-md); background:rgba(255,255,255,0.035); border:1px solid var(--line); position:relative; overflow:hidden;}
+  .kpi::after{content:""; position:absolute; right:-18px; top:-18px; width:56px; height:56px; border-radius:50%; background:var(--c); opacity:.14; filter:blur(10px);}
+  .kpi b{display:block; font-family:'Prompt',sans-serif; font-size:26px; font-weight:700; line-height:1.1; color:var(--c);}
+  .kpi span{font-size:11.5px; color:var(--ink-2);}
+
+  .tabs{display:flex; gap:4px; padding:4px; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid var(--line);}
+  .tabs button{flex:1; background:none; border:none; cursor:pointer; padding:9px; border-radius:10px; font-size:13.5px; font-weight:500; color:var(--ink-2);
+    display:inline-flex; align-items:center; justify-content:center; gap:7px; transition:background .2s, color .2s;}
+  .tabs button[aria-selected="true"]{background:rgba(255,255,255,0.1); color:var(--ink);}
+  .count{font-size:11px; padding:1px 7px; border-radius:999px; background:rgba(56,225,255,0.15); color:var(--aqua);}
+
+  .filters{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg{display:inline-flex; padding:3px; border-radius:999px; background:rgba(255,255,255,0.04); border:1px solid var(--line);}
+  .seg button{background:none; border:none; cursor:pointer; font-size:12px; padding:5px 11px; border-radius:999px; color:var(--ink-2); transition:background .2s,color .2s;}
+  .seg button[aria-pressed="true"]{background:var(--ink); color:var(--bg); font-weight:600;}
+
+  /* ---------- ฟีด ---------- */
+  .feed{display:flex; flex-direction:column; gap:10px;}
+  .fcard{display:flex; gap:12px; padding:11px; border-radius:var(--r-lg); cursor:pointer; position:relative;
+    background:rgba(255,255,255,0.03); border:1px solid var(--line); transition:transform .2s, background .2s, border-color .2s;}
+  .fcard::before{content:""; position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:0 3px 3px 0; background:var(--c); box-shadow:0 0 12px var(--c);}
+  .fcard:hover{background:rgba(255,255,255,0.06); border-color:var(--line-2); transform:translateY(-1px);}
+  .fcard.stale{opacity:.6;}
+  .fcard.enter{animation:enter .6s cubic-bezier(.2,.9,.25,1) both;}
+  @keyframes enter{ from{opacity:0; transform:translateY(-10px) scale(.98);} }
+  .thumb{width:74px; height:74px; border-radius:12px; flex-shrink:0; overflow:hidden; border:none; padding:0; cursor:zoom-in;
+    background:color-mix(in srgb, var(--c) 14%, #0e1521); display:grid; place-items:center; color:var(--c);}
+  .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .thumb.empty{cursor:inherit;}
+  .fbody{flex:1; min-width:0;}
+  .ftop{display:flex; align-items:baseline; gap:8px;}
+  .ftop h3{flex:1; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ftime{font-size:11px; color:var(--ink-3); flex-shrink:0;}
+  .fdesc{margin:5px 0 0; font-size:12.5px; color:var(--ink-2); line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical;}
+  .tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;}
+  .tag{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; padding:2px 8px; border-radius:999px;
+    color:var(--c); background:color-mix(in srgb, var(--c) 13%, transparent); border:1px solid color-mix(in srgb, var(--c) 40%, transparent);}
+  .tag.plain{--c:#a9b6ca;}
+  .acts{display:flex; gap:6px; flex-wrap:wrap; margin-top:9px;}
+  .act{display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:11.5px; font-weight:500; padding:5px 10px; border-radius:999px;
+    background:rgba(255,255,255,0.04); border:1px solid var(--line-2); color:var(--ink-2); transition:all .15s;}
+  .act:hover{color:var(--ink); border-color:var(--ink-3);}
+  .act:active{transform:scale(.95);}
+  .act.on{background:var(--aqua); border-color:var(--aqua); color:#04121d; font-weight:600;}
+  .act.armed{background:rgba(52,211,153,0.16); border-color:var(--ok); color:var(--ok); font-weight:600;}
+  .empty{text-align:center; padding:28px 12px; color:var(--ink-3); font-size:13px; line-height:1.7;}
+  .empty .big{font-size:34px; margin-bottom:6px;}
+  .more{width:100%; padding:10px; border-radius:var(--r-md); cursor:pointer; background:none; border:1px dashed var(--line-2); color:var(--ink-2); font-size:12.5px;}
+
+  /* ---------- สถิติ ---------- */
+  .stat-title{font-size:12.5px; color:var(--ink-2); margin-bottom:10px; display:flex; justify-content:space-between;}
+  .hist{width:100%; height:110px; display:block;}
+  .hist rect.bar{transition:height .8s, y .8s;}
+  .lvl-stack{display:flex; height:12px; border-radius:9px; overflow:hidden; background:rgba(255,255,255,0.05);}
+  .lvl-stack i{display:block; height:100%; transition:width .9s cubic-bezier(.2,.9,.25,1);}
+  .legend{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-size:11.5px; color:var(--ink-2);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:9px; height:9px; border-radius:3px; background:var(--c);}
+  .top-row{display:flex; align-items:center; gap:10px; font-size:12.5px; padding:6px 0; cursor:pointer;}
+  .top-row span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .top-row div{width:90px; height:6px; border-radius:6px; background:rgba(255,255,255,0.05); overflow:hidden;}
+  .top-row div i{display:block; height:100%; background:linear-gradient(90deg, var(--aqua-2), var(--aqua));}
+  .top-row b{width:22px; text-align:right; font-family:'Prompt',sans-serif;}
+
+  /* ---------- เครื่องมือแผนที่ ---------- */
+  .tools{position:fixed; z-index:9; right:16px; top:calc(16px + env(safe-area-inset-top, 0px)); display:flex; flex-direction:column; gap:10px;}
+  .tool-group{display:flex; flex-direction:column; border-radius:16px;}
+  .tool{width:46px; height:46px; display:grid; place-items:center; background:none; border:none; cursor:pointer; color:var(--ink-2); position:relative; transition:color .2s, background .2s;}
+  .tool:first-child{border-radius:16px 16px 0 0;} .tool:last-child{border-radius:0 0 16px 16px;} .tool:only-child{border-radius:16px;}
+  .tool + .tool{border-top:1px solid var(--line);}
+  .tool:hover{color:var(--ink); background:rgba(255,255,255,0.06);}
+  .tool[aria-pressed="true"]{color:var(--aqua); background:rgba(56,225,255,0.12);}
+  .tool .t3d{font-family:'Prompt',sans-serif; font-weight:700; font-size:13px;}
+  .tool em{position:absolute; right:calc(100% + 10px); top:50%; transform:translateY(-50%) translateX(6px); white-space:nowrap; pointer-events:none;
+    font-style:normal; font-size:12px; padding:6px 10px; border-radius:8px; background:var(--glass-solid); border:1px solid var(--line-2);
+    opacity:0; transition:opacity .15s, transform .15s;}
+  .tool:hover em{opacity:1; transform:translateY(-50%);}
+  @media (hover:none){ .tool em{display:none;} }
+  body.picking .tools .hide-pick{display:none;}
+
+  .fab{position:fixed; z-index:9; bottom:calc(28px + env(safe-area-inset-bottom, 0px)); left:calc((100vw + var(--sheet-w) + 16px) / 2); transform:translateX(-50%);
+    display:inline-flex; align-items:center; gap:10px; cursor:pointer; border:none; border-radius:999px; padding:16px 26px 16px 20px;
+    font-family:'Prompt',sans-serif; font-size:16px; font-weight:600; color:#fff;
+    background:linear-gradient(120deg, #ff5a5f, var(--tu) 50%, #b5179e); box-shadow:0 18px 40px -10px rgba(226,35,26,0.75), inset 0 1px 0 rgba(255,255,255,0.25);
+    transition:transform .2s, box-shadow .2s, opacity .3s;}
+  .fab::before{content:""; position:absolute; inset:-4px; border-radius:999px; border:2px solid rgba(255,90,95,0.55); animation:fabring 2.4s ease-out infinite;}
+  @keyframes fabring{ from{transform:scale(1); opacity:.9;} to{transform:scale(1.25,1.5); opacity:0;} }
+  .fab:hover{transform:translateX(-50%) translateY(-2px); box-shadow:0 24px 50px -10px rgba(226,35,26,0.9);}
+  .fab-plus{width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.2); display:grid; place-items:center;}
+  body.picking .fab{opacity:0; pointer-events:none;}
+  @media (max-width:820px){
+    .fab{left:auto; right:16px; transform:none; bottom:calc(var(--peek) + 14px); padding:14px 20px 14px 16px; font-size:15px;}
+    .fab:hover{transform:translateY(-2px);}
+    body:not([data-sheet="peek"]) .fab{opacity:0; pointer-events:none;}
+  }
+
+  /* ---------- หมุด ---------- */
+  .pin{position:relative; width:36px; height:42px; cursor:pointer; filter:drop-shadow(0 8px 10px rgba(0,0,0,0.55));}
+  .pin-body{position:absolute; left:3px; top:0; width:30px; height:30px; border-radius:50% 50% 50% 3px; transform:rotate(-45deg);
+    background:linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 55%, #000)); border:2px solid rgba(255,255,255,0.92);
+    display:grid; place-items:center; transition:transform .2s;}
+  .pin-body .ico{transform:rotate(45deg); color:#06111b;}
+  .pin:hover .pin-body{transform:rotate(-45deg) scale(1.12);}
+  .pin::after{content:""; position:absolute; left:50%; bottom:0; width:10px; height:4px; margin-left:-5px; border-radius:50%; background:rgba(0,0,0,0.5);}
+  .pin.live::before{content:""; position:absolute; left:50%; bottom:-6px; width:16px; height:16px; margin-left:-8px; border-radius:50%;
+    border:2px solid var(--c); animation:pinpulse 2s ease-out infinite;}
+  @keyframes pinpulse{ from{transform:scale(.4) scaleY(.5); opacity:1;} to{transform:scale(2.6) scaleY(.5); opacity:0;} }
+  .pin.stale{opacity:.55;}
+  .pin-badge{position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; font-size:10.5px; font-weight:700;
+    display:grid; place-items:center; color:#04121d; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.4);}
+  .me-dot{width:18px; height:18px; border-radius:50%; background:#3b82f6; border:3px solid #fff; box-shadow:0 0 0 0 rgba(59,130,246,0.6); animation:me 2s infinite;}
+  @keyframes me{ 70%{box-shadow:0 0 0 16px rgba(59,130,246,0);} 100%{box-shadow:0 0 0 0 rgba(59,130,246,0);} }
+
+  /* ---------- Popup ---------- */
+  .fw-popup .maplibregl-popup-content{background:var(--glass-solid); color:var(--ink); border:1px solid var(--line-2); border-radius:18px; padding:0; overflow:hidden;
+    box-shadow:0 30px 60px -16px rgba(0,0,0,0.8); font-family:'IBM Plex Sans Thai',sans-serif;}
+  .fw-popup .maplibregl-popup-tip{display:none;}
+  .fw-popup .maplibregl-popup-close-button{top:8px; right:8px; width:28px; height:28px; border-radius:50%; font-size:18px; line-height:26px;
+    background:rgba(5,8,13,0.7); color:#fff; z-index:2;}
+  .pop{width:290px;}
+  .pop-img{display:block; width:100%; border:none; padding:0; cursor:zoom-in; background:#000;}
+  .pop-img img{width:100%; height:160px; object-fit:cover; display:block;}
+  .pop-body{padding:12px 14px 14px; border-top:3px solid var(--c);}
+  .pop-body h3{font-size:15px; margin:8px 30px 3px 0;}
+  .pop-img + .pop-body h3{margin-right:0;}
+  .pop-body p{margin:0 0 4px; font-size:13px; color:var(--ink-2); line-height:1.5;}
+  .pop-meta{font-size:11.5px; color:var(--ink-3);}
+  .maplibregl-ctrl-attrib{background:rgba(7,11,18,0.6) !important; color:#7d8aa0 !important; font-size:10.5px;}
+  .maplibregl-ctrl-attrib a{color:#9fb0c8 !important;}
+  .maplibregl-ctrl-attrib-button{filter:invert(1);}
+
+  /* ---------- โหมดปักหมุด ---------- */
+  .pick{position:fixed; inset:0; z-index:8; pointer-events:none;}
+  .pick-hint{position:absolute; top:calc(18px + env(safe-area-inset-top, 0px)); left:50%; transform:translateX(-50%); border-radius:999px;
+    padding:10px 18px; font-size:13.5px; display:flex; align-items:center; gap:8px; white-space:nowrap; max-width:calc(100% - 100px);}
+  .pick-pin{position:absolute; left:50%; top:50%; width:52px; height:66px; margin-left:-26px; margin-top:-66px;}
+  .pick-pin-body{position:absolute; left:4px; top:0; width:44px; height:44px; border-radius:50% 50% 50% 4px; transform:rotate(-45deg);
+    background:linear-gradient(135deg, #ff5a5f, var(--tu)); border:3px solid #fff; display:grid; place-items:center;
+    box-shadow:0 14px 30px -6px rgba(226,35,26,0.7); transition:transform .25s cubic-bezier(.2,.9,.25,1);}
+  .pick-pin-body .ico{transform:rotate(45deg); color:#fff;}
+  body.moving .pick-pin-body{transform:rotate(-45deg) translate(9px,-9px);}
+  .pick-shadow{position:absolute; left:50%; bottom:0; width:14px; height:6px; margin-left:-7px; border-radius:50%; background:rgba(0,0,0,0.55);
+    box-shadow:0 0 0 6px rgba(255,90,95,0.25); transition:transform .25s;}
+  body.moving .pick-shadow{transform:scale(.6);}
+  .pick-bar{position:absolute; left:50%; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); width:min(620px, calc(100% - 24px));
+    border-radius:var(--r-xl); padding:14px; display:flex; align-items:center; gap:12px; pointer-events:auto; flex-wrap:wrap;}
+  .pick-place{display:flex; align-items:center; gap:10px; flex:1; min-width:200px; color:var(--aqua);}
+  .pick-place div{min-width:0;}
+  .pick-place small{display:block; font-size:11px; color:var(--ink-3);}
+  .pick-place b{display:block; font-family:'Prompt',sans-serif; font-weight:500; font-size:14px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .pick-actions{display:flex; gap:8px; margin-left:auto;}
+
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; border-radius:12px; padding:11px 16px;
+    font-size:14px; font-weight:600; border:1px solid var(--line-2); background:rgba(255,255,255,0.05); color:var(--ink); transition:all .15s;}
+  .btn:hover{background:rgba(255,255,255,0.1);}
+  .btn.icon{padding:11px;}
+  .btn.primary{border:none; color:#fff; background:linear-gradient(120deg, #ff5a5f, var(--tu)); box-shadow:0 10px 24px -8px rgba(226,35,26,0.7);}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.primary:disabled{opacity:.6; cursor:wait;}
+  .btn.block{width:100%; padding:15px; font-family:'Prompt',sans-serif; font-size:16px;}
+
+  /* ---------- กล่องแจ้งเหตุ ---------- */
+  .backdrop{position:fixed; inset:0; z-index:30; display:grid; place-items:center; padding:16px;
+    background:rgba(3,6,10,0.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); animation:fade .25s ease;}
+  @keyframes fade{ from{opacity:0;} }
+  .dialog{width:min(580px,100%); max-height:calc(100dvh - 32px); overflow-y:auto; border-radius:var(--r-xl); padding:22px;
+    background:rgba(12,18,29,0.92); animation:rise .45s cubic-bezier(.2,.9,.25,1);}
+  @keyframes rise{ from{transform:translateY(24px); opacity:0;} }
+  @media (max-width:820px){
+    .backdrop{place-items:end stretch; padding:0;}
+    .dialog{max-height:94dvh; border-radius:26px 26px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom, 0px));}
+  }
+  .dlg-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:18px;}
+  .dlg-head h2{font-size:22px;}
+  .dlg-head p{margin:3px 0 0; font-size:13px; color:var(--ink-2);}
+  .icon-btn{width:38px; height:38px; border-radius:50%; border:1px solid var(--line-2); background:rgba(255,255,255,0.05); cursor:pointer; display:grid; place-items:center; flex-shrink:0;}
+  .field{margin-bottom:18px;}
+  .lbl{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:var(--ink-2); margin-bottom:8px;}
+  .lbl small{color:var(--ink-3); font-weight:400;}
+  .place-row{display:flex; align-items:center; gap:10px; padding:4px 6px 4px 12px; border-radius:var(--r-md); border:1px solid var(--line-2); background:rgba(255,255,255,0.04); color:var(--aqua);}
+  .place-row input{flex:1; min-width:0; background:none; border:none; color:var(--ink); font:inherit; font-size:14px; padding:9px 0; outline:none;}
+  .link{background:none; border:none; cursor:pointer; color:var(--aqua); font-size:12.5px; font-weight:600; padding:8px; white-space:nowrap;}
+
+  .level-wrap{display:grid; grid-template-columns:118px 1fr; gap:14px; align-items:stretch;}
+  @media (max-width:420px){ .level-wrap{grid-template-columns:92px 1fr; gap:10px;} }
+  .figure{width:100%; height:100%; max-height:230px; border-radius:var(--r-md); background:linear-gradient(180deg, rgba(56,225,255,0.05), rgba(255,255,255,0.02)); border:1px solid var(--line);}
+  #water{transition:transform .9s cubic-bezier(.2,.9,.25,1); color:var(--wc, var(--aqua));}
+  .wave{animation:wave 2.4s linear infinite;}
+  .wave.back{animation-duration:3.8s; animation-direction:reverse; opacity:.45;}
+  @keyframes wave{ to{transform:translateX(-60px);} }
+  .level-list{display:flex; flex-direction:column; gap:7px;}
+  .lvl{display:flex; align-items:center; gap:11px; text-align:left; cursor:pointer; padding:9px 11px; border-radius:var(--r-md);
+    background:rgba(255,255,255,0.03); border:1px solid var(--line-2); transition:all .18s;}
+  .lvl:hover{border-color:var(--c);}
+  .lvl[aria-checked="true"]{border-color:var(--c); background:color-mix(in srgb, var(--c) 14%, transparent); box-shadow:0 0 0 1px var(--c) inset, 0 8px 24px -12px var(--c);}
+  .lvl-dot{width:30px; height:30px; border-radius:9px; flex-shrink:0; display:grid; place-items:center; font-family:'Prompt',sans-serif; font-weight:700; font-size:13px;
+    color:#06111b; background:var(--c);}
+  .lvl b{display:block; font-size:13.5px;}
+  .lvl small{display:block; font-size:11.5px; color:var(--ink-2); line-height:1.35;}
+
+  .upload{position:relative; border-radius:var(--r-lg); border:1.5px dashed var(--line-2); padding:20px; text-align:center; cursor:pointer;
+    transition:border-color .2s, background .2s; color:var(--ink-2); font-size:13px;}
+  .upload:hover, .upload.drag{border-color:var(--aqua); background:rgba(56,225,255,0.05);}
+  .upload input{position:absolute; inset:0; width:100%; opacity:0; cursor:pointer;}
+  .upload .ico{width:46px; height:46px; border-radius:14px; margin:0 auto 8px; background:rgba(56,225,255,0.1); color:var(--aqua);}
+  .upload b{color:var(--ink);}
+  .preview{position:relative; border-radius:var(--r-lg); overflow:hidden;}
+  .preview img{width:100%; max-height:240px; object-fit:cover; display:block;}
+  .preview button{position:absolute; top:10px; right:10px; padding:6px 12px; border-radius:999px; cursor:pointer; font-size:12.5px;
+    background:rgba(5,8,13,0.75); border:1px solid var(--line-2);}
+  textarea{width:100%; min-height:84px; resize:vertical; border-radius:var(--r-md); border:1px solid var(--line-2); background:rgba(255,255,255,0.04);
+    color:var(--ink); font:inherit; font-size:14px; padding:11px 13px;}
+  textarea::placeholder, input::placeholder{color:var(--ink-3);}
+  .counter{text-align:right; font-size:11px; color:var(--ink-3); margin-top:4px;}
+  .form-error{color:var(--rose); font-size:13px; margin:0 0 12px;}
+  .fine{font-size:11.5px; color:var(--ink-3); text-align:center; margin:12px 0 0; line-height:1.5;}
+
+  /* ---------- Lightbox / Toast ---------- */
+  .lightbox{position:fixed; inset:0; z-index:60; display:grid; place-items:center; padding:24px; cursor:zoom-out;
+    background:rgba(2,4,8,0.92); animation:fade .2s;}
+  .lightbox img{max-width:100%; max-height:100%; border-radius:14px; box-shadow:0 40px 80px rgba(0,0,0,0.6);}
+  #toast{position:fixed; z-index:70; top:calc(18px + env(safe-area-inset-top, 0px)); left:50%; transform:translate(-50%,-160%);
+    max-width:calc(100% - 32px); width:max-content; display:flex; align-items:center; gap:10px; padding:12px 18px; border-radius:18px; font-size:13.5px; line-height:1.45;
+    background:var(--glass-solid); border:1px solid rgba(56,225,255,0.35); box-shadow:0 20px 50px -12px rgba(0,0,0,0.7);
+    opacity:0; visibility:hidden; transition:transform .4s cubic-bezier(.2,.9,.25,1), opacity .3s, visibility .3s;}
+  #toast.show{transform:translate(-50%,0); opacity:1; visibility:visible;}
+  #toast i{width:8px; height:8px; border-radius:50%; flex-shrink:0; background:var(--aqua); box-shadow:0 0 10px var(--aqua);}
+</style>
+</head>
+<body data-sheet="peek">
+
+<div id="splash">
+  <div class="splash-inner">
+    <div class="splash-logo"><span class="ring"></span><span class="ring r2"></span><span data-icon="droplet" data-size="44"></span></div>
+    <h1>TU FLOOD WATCH</h1>
+    <p>แผนที่แจ้งเตือนน้ำขัง · มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต</p>
+    <div class="splash-bar"><i></i></div>
+  </div>
+</div>
+
+<div id="map" aria-label="แผนที่ 3 มิติ มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต"></div>
+<div class="vignette"></div>
+
+<aside class="sheet glass" id="sheet">
+  <div class="sheet-grab" id="sheetGrab">
+    <div class="handle"></div>
+    <div class="brand-row">
+      <div class="logo"><span data-icon="droplet" data-size="22"></span></div>
+      <div class="brand-txt">
+        <h1>TU Flood Watch</h1>
+        <p>แจ้งเตือนน้ำขัง · มธ. ศูนย์รังสิต</p>
+      </div>
+      <span class="live" id="live" title=""><i></i><span id="liveTxt">กำลังเชื่อมต่อ</span></span>
+    </div>
+  </div>
+  <div class="sheet-scroll" id="sheetScroll">
+    <div class="alert" id="alertCard" aria-live="polite"></div>
+    <div class="demo-pill" id="demoPill" hidden>
+      <span>โหมดตัวอย่าง · ข้อมูลสมมุติ ไม่ใช่รายงานจริง</span>
+      <button type="button" id="demoExit">ออก</button>
+    </div>
+    <div class="card" id="weather"><div class="muted">กำลังโหลดพยากรณ์ฝน…</div></div>
+    <div class="kpis">
+      <div class="kpi" style="--c:#38e1ff"><b id="kpiActive">0</b><span>จุดน้ำขังตอนนี้</span></div>
+      <div class="kpi" style="--c:#f43f5e"><b id="kpiSevere">0</b><span>ถึงเข่าขึ้นไป</span></div>
+      <div class="kpi" style="--c:#34d399"><b id="kpiCleared">0</b><span>น้ำลดแล้ว</span></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabFeed" aria-selected="true" data-tab="feed"><span data-icon="list" data-size="16"></span>รายงาน <span class="count" id="feedCount">0</span></button>
+      <button role="tab" id="tabStats" aria-selected="false" data-tab="stats"><span data-icon="chart" data-size="16"></span>สถิติ</button>
+    </div>
+    <div id="panelFeed">
+      <div class="filters">
+        <div class="seg" id="statusSeg" role="group" aria-label="สถานะ">
+          <button data-v="all" aria-pressed="true">ทั้งหมด</button>
+          <button data-v="active" aria-pressed="false">ยังท่วม</button>
+          <button data-v="cleared" aria-pressed="false">น้ำลดแล้ว</button>
+        </div>
+        <div class="seg" id="rangeSeg" role="group" aria-label="ช่วงเวลา">
+          <button data-v="24h" aria-pressed="false">24 ชม.</button>
+          <button data-v="7d" aria-pressed="true">7 วัน</button>
+          <button data-v="all" aria-pressed="false">ทั้งหมด</button>
+        </div>
+      </div>
+      <div class="feed" id="feed" style="margin-top:12px"></div>
+    </div>
+    <div id="panelStats" hidden>
+      <div class="card">
+        <div class="stat-title"><span>รายงานใน 24 ชั่วโมงที่ผ่านมา</span><span id="histTotal"></span></div>
+        <svg class="hist" id="hist" viewBox="0 0 360 110" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="stat-title"><span>ระดับน้ำของจุดที่ยังท่วม</span></div>
+        <div class="lvl-stack" id="lvlStack"></div>
+        <div class="legend" id="lvlLegend"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="stat-title"><span>จุดที่ถูกรายงานบ่อย (7 วัน)</span></div>
+        <div id="topPlaces"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div class="tools">
+  <div class="tool-group glass hide-pick">
+    <button class="tool" id="zoomIn" aria-label="ซูมเข้า"><span data-icon="plus"></span><em>ซูมเข้า</em></button>
+    <button class="tool" id="zoomOut" aria-label="ซูมออก"><span data-icon="minus"></span><em>ซูมออก</em></button>
+  </div>
+  <div class="tool-group glass">
+    <button class="tool hide-pick" id="btn3d" aria-pressed="true" aria-label="สลับมุมมอง 3 มิติ"><span class="t3d">3D</span><em>มุมมอง 3 มิติ</em></button>
+    <button class="tool hide-pick" id="btnRadar" aria-pressed="false" aria-label="เรดาร์ฝน"><span data-icon="radar"></span><em>เรดาร์ฝนสด</em></button>
+    <button class="tool" id="btnLocate" aria-label="ตำแหน่งของฉัน"><span data-icon="locate"></span><em>ตำแหน่งของฉัน</em></button>
+    <button class="tool hide-pick" id="btnHome" aria-label="กลับไปที่ มธ."><span data-icon="home"></span><em>กลับไปที่ มธ.</em></button>
+  </div>
+  <div class="tool-group glass hide-pick">
+    <button class="tool" id="btnNotify" aria-pressed="false" aria-label="แจ้งเตือนรายงานใหม่"><span data-icon="bell"></span><em>แจ้งเตือนรายงานใหม่</em></button>
+  </div>
+</div>
+
+<button class="fab" id="fab"><span class="fab-plus"><span data-icon="plus" data-size="18"></span></span>แจ้งน้ำขัง</button>
+
+<div class="pick" id="pick" hidden>
+  <div class="pick-hint glass"><span data-icon="move" data-size="16"></span>เลื่อนแผนที่ให้หมุดตรงจุดที่น้ำขัง</div>
+  <div class="pick-pin"><div class="pick-pin-body"><span data-icon="droplet" data-size="20"></span></div><div class="pick-shadow"></div></div>
+  <div class="pick-bar glass">
+    <div class="pick-place"><span data-icon="mapPin" data-size="22"></span><div><small>ตำแหน่งที่เลือก</small><b id="pickPlace">—</b></div></div>
+    <div class="pick-actions">
+      <button class="btn" id="pickCancel">ยกเลิก</button>
+      <button class="btn icon" id="pickGps" aria-label="ใช้ตำแหน่ง GPS ของฉัน" title="ใช้ตำแหน่ง GPS ของฉัน"><span data-icon="locate"></span></button>
+      <button class="btn primary" id="pickOk">ยืนยันจุดนี้ <span data-icon="arrowRight" data-size="16"></span></button>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="dialog" hidden>
+  <div class="dialog glass" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="dlg-head">
+      <div><h2 id="dlgTitle">แจ้งจุดน้ำขัง</h2><p>รายงานจะขึ้นบนแผนที่ของทุกคนทันที</p></div>
+      <button class="icon-btn" id="dlgClose" aria-label="ปิด"><span data-icon="x"></span></button>
+    </div>
+    <div class="field">
+      <label class="lbl" for="placeInput">สถานที่ <small>(แก้ไขได้)</small></label>
+      <div class="place-row"><span data-icon="mapPin" data-size="18"></span><input id="placeInput" type="text" autocomplete="off" placeholder="เช่น หน้าอาคาร SC"><button type="button" class="link" id="changeLoc">เปลี่ยนจุด</button></div>
+    </div>
+    <div class="field">
+      <div class="lbl">ระดับน้ำ</div>
+      <div class="level-wrap">
+        <svg class="figure" viewBox="0 0 120 210" aria-hidden="true">
+          <g fill="#2b3a57">
+            <circle cx="60" cy="22" r="13"/>
+            <rect x="43" y="40" width="34" height="64" rx="12"/>
+            <rect x="30" y="44" width="11" height="54" rx="5.5"/>
+            <rect x="79" y="44" width="11" height="54" rx="5.5"/>
+            <rect x="45" y="98" width="13" height="102" rx="6"/>
+            <rect x="62" y="98" width="13" height="102" rx="6"/>
+          </g>
+          <g fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1" font-size="7" font-family="IBM Plex Sans Thai, sans-serif">
+            <line x1="6" y1="190" x2="14" y2="190"/><line x1="6" y1="169" x2="14" y2="169"/><line x1="6" y1="149" x2="14" y2="149"/>
+            <text x="16" y="192" fill="rgba(255,255,255,0.45)" stroke="none">10</text>
+            <text x="16" y="171" fill="rgba(255,255,255,0.45)" stroke="none">30</text>
+            <text x="16" y="151" fill="rgba(255,255,255,0.45)" stroke="none">50</text>
+          </g>
+          <g id="water" style="transform:translateY(215px)">
+            <path class="wave back" fill="currentColor" d="M0 -3 Q15 -9 30 -3 T60 -3 T90 -3 T120 -3 T150 -3 T180 -3 T210 -3 T240 -3 V120 H0 Z"/>
+            <path class="wave" fill="currentColor" fill-opacity="0.72" d="M0 0 Q15 -6 30 0 T60 0 T90 0 T120 0 T150 0 T180 0 T210 0 T240 0 V120 H0 Z"/>
+          </g>
+          <line x1="0" y1="200" x2="120" y2="200" stroke="rgba(255,255,255,0.2)"/>
+        </svg>
+        <div class="level-list" id="levelList" role="radiogroup" aria-label="ระดับน้ำ"></div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="lbl">รูปถ่ายหน้างาน <small>(แนะนำ ช่วยให้คนอื่นเชื่อถือ)</small></div>
+      <div class="upload" id="uploadBox">
+        <input type="file" id="imgInput" accept="image/*" aria-label="เลือกรูปถ่าย">
+        <span class="ico"><span data-icon="camera" data-size="22"></span></span>
+        <div><b>ถ่ายรูป / เลือกรูป</b> หรือลากไฟล์มาวาง</div>
+      </div>
+      <div class="preview" id="preview" hidden><img id="previewImg" alt="ตัวอย่างรูปที่แนบ"><button type="button" id="removeImg">ลบรูป</button></div>
+    </div>
+    <div class="field">
+      <label class="lbl" for="descInput">รายละเอียด <small>(ไม่บังคับ)</small></label>
+      <textarea id="descInput" placeholder="เช่น น้ำขังเต็มทางเดิน รถจักรยานยนต์ผ่านไม่ได้"></textarea>
+      <div class="counter"><span id="descCount">0</span> / 500</div>
+    </div>
+    <p class="form-error" id="formError" hidden></p>
+    <button class="btn primary block" id="submitBtn">ส่งรายงาน</button>
+    <p class="fine">รายงานและรูปจะแสดงต่อสาธารณะ โปรดหลีกเลี่ยงการถ่ายติดใบหน้าบุคคลหรือป้ายทะเบียนรถ</p>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden><img id="lbImg" alt="ภาพจุดน้ำขังขนาดใหญ่"></div>
+<div id="toast" role="status"><i></i><span id="toastMsg"></span></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     TU Flood Watch — แผนที่ 3 มิติแจ้งเตือนน้ำขัง
+     - แผนที่: MapLibre GL + OpenStreetMap (OpenFreeMap) ปรับธีมกลางคืนเอง
+       ถ้าโหลดแผนที่เวกเตอร์ไม่ได้ จะสลับไปใช้แผนที่ภาพ CARTO อัตโนมัติ
+     - ฐานข้อมูล: Firebase Firestore คอลเลกชัน "flood_reports" (พิกัดจริง lat/lng)
+     - สภาพอากาศ: Open-Meteo, เรดาร์ฝน: RainViewer (ไม่ต้องใช้ API key)
+     ===================================================================== */
+
+  /* ---------- ตั้งค่า ---------- */
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB3ARgZc9MVD-9285EF2YBJPJrJ2zLiZew",
+    authDomain: "tu-flood-watch.firebaseapp.com",
+    projectId: "tu-flood-watch",
+    storageBucket: "tu-flood-watch.firebasestorage.app",
+    messagingSenderId: "901289067368",
+    appId: "1:901289067368:web:343861bfca67f9c9e1ccdd"
+  };
+  const SDK_BASE = 'https://www.gstatic.com/firebasejs/10.8.0/';
+  const COLLECTION = 'flood_reports';
+
+  const TU_CENTER = [100.6035, 14.0715];       // [lng, lat] กลางวิทยาเขตรังสิต
+  const MAX_DIST_KM = 2.5;                      // รับแจ้งเฉพาะจุดในรัศมีนี้จากกลางวิทยาเขต
+  const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+  const FALLBACK_STYLE = {
+    version: 8,
+    sources: {
+      carto: {
+        type: 'raster', tileSize: 256, maxzoom: 20,
+        tiles: ['a', 'b', 'c', 'd'].map((s) => `https://${s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png`),
+        attribution: '© OpenStreetMap contributors © CARTO'
+      }
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#0a0e15' } },
+      { id: 'carto', type: 'raster', source: 'carto' }
+    ]
+  };
+
+  const MAX_DESC = 500, MAX_PLACE = 120;
+  const IMG_MAX_SIDE = 800, IMG_MAX_CHARS = 260000;     // เอกสาร Firestore จำกัด 1 MiB
+  const FEED_LIMIT = 150, FEED_PAGE = 20;
+  const CONFIRM_KEY = 'tufw.confirmed.v1', NOTIFY_KEY = 'tufw.notify.v1';
+  const HOUR = 3600e3, DAY = 24 * HOUR;
+  const RANGES = { '24h': DAY, '7d': 7 * DAY, all: Infinity };
+
+  // ระดับน้ำ: radius = รัศมีวงน้ำบนแผนที่ (เมตร), wy = ระดับน้ำในภาพคน (หน่วย SVG)
+  const LEVELS = {
+    1: { label: 'ระดับตาตุ่ม', range: 'ไม่เกิน 10 ซม.', note: 'เดินผ่านได้ ระวังลื่น', color: '#5eead4', radius: 14, wy: 190 },
+    2: { label: 'ครึ่งแข้ง', range: '10–30 ซม.', note: 'จักรยาน/มอเตอร์ไซค์ควรเลี่ยง', color: '#facc15', radius: 22, wy: 169 },
+    3: { label: 'ระดับเข่า', range: '30–50 ซม.', note: 'ควรเลี่ยงเส้นทางนี้', color: '#fb923c', radius: 32, wy: 149 },
+    4: { label: 'เหนือเข่า', range: 'มากกว่า 50 ซม.', note: 'อันตราย ห้ามผ่าน', color: '#f43f5e', radius: 44, wy: 120 }
+  };
+  const CLEARED_COLOR = '#34d399', UNKNOWN_COLOR = '#38e1ff';
+
+  /* ---------- ไอคอน (เส้นแบบ Lucide) ---------- */
+  const PATHS = {
+    droplet: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    radar: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6M8 14v6M12 16v6"/>',
+    locate: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+    home: '<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+    move: '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
+    mapPin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+    arrowRight: '<path d="M5 12h14M12 5l7 7-7 7"/>',
+    camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    chart: '<path d="M3 3v18h18"/><path d="M7 16V11M12 16V7M17 16v-3"/>',
+    thumb: '<path d="M7 10v12M15 5.9 14 10h5.8a2 2 0 0 1 1.9 2.6l-2.3 7a2 2 0 0 1-1.9 1.4H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.8a2 2 0 0 0 1.8-1.1L12 2a3.1 3.1 0 0 1 3 3.9z"/>',
+    alert: '<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/>',
+    cloudSun: '<path d="M12 2v2M4.9 4.9l1.4 1.4M20 12h2M19.1 4.9l-1.4 1.4M15.9 13A4 4 0 0 0 8.1 11"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"/>',
+    rain: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6M8 14v6M12 16v6"/>',
+    storm: '<path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 9"/><path d="m13 12-3 5h4l-3 5"/>'
+  };
+  const icon = (name, size) => {
+    const s = size || 18;
+    return `<svg class="ico" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] || ''}</svg>`;
+  };
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    el.outerHTML = icon(el.dataset.icon, Number(el.dataset.size) || 18);
+  });
+
+  /* ---------- อ้างอิง DOM ---------- */
+  const $ = (id) => document.getElementById(id);
+  const body = document.body;
+  const sheet = $('sheet');
+  const feedEl = $('feed');
+  const toastEl = $('toast');
+
+  /* ---------- สถานะ ---------- */
+  let liveReports = [];
+  let demoReports = null;        // มีค่าเมื่อเปิดโหมดตัวอย่าง
+  let byId = new Map();
+  let statusFilter = 'all', rangeFilter = '7d';
+  let feedShown = FEED_PAGE;
+  let feedNotice = 'กำลังโหลดรายงาน…';
+  let firstSnapshot = true;
+  const knownIds = new Set();
+  const confirmedSet = loadSet(CONFIRM_KEY);
+  let notifyOn = loadFlag(NOTIFY_KEY);
+  let unseen = 0;
+  const baseTitle = document.title;
+  let db = null, fs = null;
+  let serverSynced = false, listenError = '', writeError = '';
+  const connectStart = Date.now();
+  let weather = null;
+  let is3D = true;
+  let pending = { lngLat: null, level: 0, image: '', imageTask: null };
+  let sending = false;
+
+  /* ---------- ตัวช่วย ---------- */
+  // ป้องกัน XSS: ข้อความจากผู้ใช้คนอื่นต้องถูก escape ก่อนใส่ลง innerHTML เสมอ
+  const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ESC[c]);
+  const safeImg = (u) =>
+    typeof u === 'string' && /^(data:image\/(jpeg|png|webp);base64,|https:\/\/)/i.test(u) ? u : '';
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+  const isNarrow = () => window.matchMedia('(max-width:820px)').matches;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // มือถือ/แท็บเล็ต (จอสัมผัส) หรือเครื่องแรม/คอร์น้อย → โหมดประหยัด
+  const LITE = window.matchMedia('(pointer: coarse)').matches
+    || (navigator.hardwareConcurrency || 8) <= 4
+    || (navigator.deviceMemory || 8) <= 4;
+  if (LITE) document.documentElement.classList.add('lite');
+
+  function loadSet(key) {
+    try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch (e) { return new Set(); }
+  }
+  function saveConfirmed() {
+    try { localStorage.setItem(CONFIRM_KEY, JSON.stringify([...confirmedSet])); } catch (e) { /* ignore */ }
+  }
+  function loadFlag(key) {
+    try { return localStorage.getItem(key) === '1'; } catch (e) { return false; }
+  }
+  function saveFlag(key, on) {
+    try { localStorage.setItem(key, on ? '1' : '0'); } catch (e) { /* ignore */ }
+  }
+
+  let toastTimer;
+  function toast(msg, ms) {
+    $('toastMsg').textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms || 3200);
+  }
+
+  function timeAgo(ts) {
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return 'เมื่อสักครู่';
+    if (m < 60) return m + ' นาทีที่แล้ว';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' ชม. ที่แล้ว';
+    const d = Math.floor(h / 24);
+    if (d < 7) return d + ' วันที่แล้ว';
+    return new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+  const clock = (ts) => new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+  function distKm(a, b) {    // a, b = [lng, lat]
+    const R = 6371, rad = Math.PI / 180;
+    const dLat = (b[1] - a[1]) * rad, dLng = (b[0] - a[0]) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function countTo(el, value) {
+    const from = Number(el.dataset.v || 0);
+    el.dataset.v = value;
+    if (!window.gsap || reduceMotion || from === value) { el.textContent = value; return; }
+    const o = { v: from };
+    gsap.to(o, { v: value, duration: 1.1, ease: 'power3.out', onUpdate: () => { el.textContent = Math.round(o.v); } });
+  }
+
+  function errorText(err) {
+    const code = (err && err.code) || '';
+    if (code === 'permission-denied') return 'ไม่มีสิทธิ์บันทึกข้อมูล — ตรวจสอบ Firestore Rules';
+    if (code === 'unavailable' || code === 'deadline-exceeded') return 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง';
+    if (code === 'invalid-argument' || code === 'resource-exhausted') return 'ข้อมูลใหญ่เกินกำหนด ลองใช้รูปที่เล็กลง';
+    return 'ดำเนินการไม่สำเร็จ' + (code ? ' (' + code + ')' : '');
+  }
+  function noteWriteError(err) {
+    const code = (err && err.code) || 'unknown';
+    writeError = 'บันทึกไม่สำเร็จ: ' + code + (code === 'permission-denied' ? ' — ต้องวาง firestore.rules แล้วกด Publish' : '');
+    updateSync();
+  }
+
+  const TIMEOUT = Symbol('timeout');
+  // เครือข่ายช้า: Firestore จะคิวการเขียนไว้และส่งให้เองเมื่อเชื่อมต่อได้ จึงไม่ต้องให้ผู้ใช้รอไม่สิ้นสุด
+  function withTimeout(promise, ms) {
+    promise.catch((e) => console.warn('การเขียนข้อมูลล้มเหลว:', e));
+    return Promise.race([promise, new Promise((r) => setTimeout(() => r(TIMEOUT), ms))]);
+  }
+
+  /* ---------- ตรรกะรายงาน ---------- */
+  const reports = () => demoReports || liveReports;
+  const levelOf = (r) => LEVELS[r.level] || null;
+  const isCleared = (r) => r.status === 'cleared';
+  const isActive = (r) => !isCleared(r) && Date.now() - r.time <= DAY;
+  const isStale = (r) => !isCleared(r) && Date.now() - r.time > DAY;
+  const colorOf = (r) => isCleared(r) ? CLEARED_COLOR : (levelOf(r) ? levelOf(r).color : UNKNOWN_COLOR);
+  function isVisible(r) {
+    if (statusFilter === 'active' && isCleared(r)) return false;
+    if (statusFilter === 'cleared' && !isCleared(r)) return false;
+    return Date.now() - r.time <= RANGES[rangeFilter];
+  }
+
+  /* =====================================================================
+     แผนที่
+     ===================================================================== */
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: STYLE_URL,
+    center: TU_CENTER,
+    zoom: 12.4,
+    pitch: 0,
+    bearing: 0,
+    maxPitch: 70,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, LITE ? 1.5 : 2),
+    fadeDuration: LITE ? 0 : 300,
+    maxBounds: [[100.45, 13.95], [100.76, 14.2]],
+    attributionControl: { compact: true }
+  });
+
+  let styleLoaded = false, usingFallback = false;
+  function useFallback() {
+    if (usingFallback) return;
+    usingFallback = true;
+    console.warn('โหลดแผนที่เวกเตอร์ไม่สำเร็จ สลับไปใช้แผนที่ภาพ');
+    map.setStyle(FALLBACK_STYLE);
+  }
+  const styleTimer = setTimeout(() => { if (!styleLoaded) useFallback(); }, 9000);
+  map.on('error', (e) => {
+    if (!styleLoaded) useFallback();
+    else console.warn('map error:', e && e.error);
+  });
+
+  // ไอคอนบางตัวไม่มีใน sprite ของสไตล์ — ใส่ภาพโปร่งใสแทนเพื่อไม่ให้ console เต็มไปด้วยคำเตือน
+  map.on('styleimagemissing', (e) => {
+    if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+  });
+
+  map.on('style.load', () => {
+    styleLoaded = true;
+    clearTimeout(styleTimer);
+    if (!usingFallback) restyle();
+    addOverlays();
+    renderMapData();
+  });
+
+  // ปรับสีแผนที่ OpenStreetMap ให้เป็นธีมกลางคืนโทนน้ำเงิน
+  function restyle() {
+    const style = map.getStyle();
+    if (!style || !style.layers) return;
+    const paint = (id, p, v) => { try { map.setPaintProperty(id, p, v); } catch (e) { /* ignore */ } };
+    const layout = (id, p, v) => { try { map.setLayoutProperty(id, p, v); } catch (e) { /* ignore */ } };
+    const LAND = '#0f141d';
+    let has3D = false;
+
+    style.layers.forEach((l) => {
+      const id = l.id, t = l.type, key = (l['source-layer'] || '') + ' ' + id;
+      if (t === 'background') paint(id, 'background-color', '#0a0e15');
+      else if (t === 'raster') paint(id, 'raster-opacity', 0.08);
+      else if (t === 'fill') {
+        if (/water/.test(key)) paint(id, 'fill-color', '#0b2340');
+        else if (/park|grass|wood|forest|scrub|wetland|garden|pitch|golf|cemetery|landcover/.test(key)) paint(id, 'fill-color', '#0f1f1b');
+        else if (/building/.test(key)) paint(id, 'fill-color', '#1a2233');
+        else if (/landuse/.test(key)) {
+          // ไฮไลต์พื้นที่มหาวิทยาลัย/โรงเรียนให้เด่นกว่าพื้นที่อื่น
+          paint(id, 'fill-color', ['match', ['get', 'class'], ['university', 'college', 'school', 'kindergarten'], '#14203a', LAND]);
+        } else paint(id, 'fill-color', LAND);
+        if (l.paint && l.paint['fill-pattern']) paint(id, 'fill-pattern', null);
+        paint(id, 'fill-outline-color', 'rgba(0,0,0,0)');
+      } else if (t === 'line') {
+        if (/water/.test(key)) paint(id, 'line-color', '#14456f');
+        else if (/transportation|road|highway|bridge|tunnel/.test(key)) {
+          if (/casing/.test(id)) paint(id, 'line-color', '#05080d');
+          else if (/motorway|trunk/.test(id)) paint(id, 'line-color', '#55678b');
+          else if (/primary|secondary/.test(id)) paint(id, 'line-color', '#3e4c68');
+          else if (/rail|transit/.test(id)) paint(id, 'line-color', '#2a3242');
+          else if (/path|pedestrian|footway|cycle|steps|track/.test(id)) paint(id, 'line-color', '#2a3447');
+          else paint(id, 'line-color', '#303c53');
+        } else if (/boundary/.test(key)) paint(id, 'line-color', '#3a4258');
+        else paint(id, 'line-color', '#222b3a');
+      } else if (t === 'symbol') {
+        const tf = l.layout && l.layout['text-field'];
+        if (tf) {
+          // ฟอนต์ของแผนที่ยังวาดอักษรไทยได้ไม่ดี จึงใช้ชื่อภาษาอังกฤษก่อน (ชื่อไทยแสดงใน UI แทน)
+          if (JSON.stringify(tf).indexOf('name') !== -1) {
+            layout(id, 'text-field', ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name:latin'], ['get', 'name']]);
+          }
+          paint(id, 'text-color', /water/.test(key) ? '#5b8fc7' : /poi/.test(key) ? '#8ea2bf' : /transportation/.test(key) ? '#7a8aa6' : '#d6dfee');
+          paint(id, 'text-halo-color', '#060910');
+          paint(id, 'text-halo-width', 1.4);
+        }
+        paint(id, 'icon-opacity', 0.65);
+      } else if (t === 'fill-extrusion') {
+        has3D = true;
+        paint(id, 'fill-extrusion-color', ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 0],
+          0, '#1b2437', 20, '#243150', 60, '#30416a', 150, '#3f5689']);
+        paint(id, 'fill-extrusion-opacity', 0.92);
+      }
+    });
+
+    // ถ้าสไตล์ไม่มีตึก 3 มิติ ให้เพิ่มเอง
+    if (!has3D) {
+      const src = Object.keys(style.sources).find((k) => style.sources[k].type === 'vector');
+      if (src) {
+        try {
+          map.addLayer({
+            id: 'fw-buildings-3d', type: 'fill-extrusion', source: src, 'source-layer': 'building', minzoom: 14,
+            paint: {
+              'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 0], 0, '#1b2437', 60, '#30416a'],
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+              'fill-extrusion-opacity': 0.92
+            }
+          }, firstSymbolId());
+        } catch (e) { /* ignore */ }
+      }
+    }
+    try { map.setLight({ anchor: 'viewport', color: '#cfe0ff', intensity: 0.4 }); } catch (e) { /* ignore */ }
+    try {
+      map.setSky({ 'sky-color': '#0b1630', 'horizon-color': '#12305a', 'fog-color': '#0a0e15', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.4 });
+    } catch (e) { /* ignore */ }
+  }
+
+  function firstSymbolId() {
+    const l = (map.getStyle().layers || []).find((x) => x.type === 'symbol');
+    return l ? l.id : undefined;
+  }
+  function overlayBeforeId() {
+    const layers = map.getStyle().layers || [];
+    const ext = layers.find((x) => x.type === 'fill-extrusion');
+    return ext ? ext.id : firstSymbolId();
+  }
+
+  // รัศมีวงน้ำเป็น "เมตรจริง" — แปลงเมตรเป็นพิกเซลตามระดับซูม
+  const K10 = Math.pow(2, 10) / (156543.03392 * Math.cos(TU_CENTER[1] * Math.PI / 180));
+  const radiusExpr = (m) => ['interpolate', ['exponential', 2], ['zoom'],
+    10, ['*', ['get', 'r'], K10 * m], 22, ['*', ['get', 'r'], K10 * 4096 * m]];
+
+  let radarOn = false;
+  function addOverlays() {
+    if (map.getSource('reports')) return;
+    radarOn = false;
+    $('btnRadar').setAttribute('aria-pressed', 'false');
+    map.addSource('reports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    const before = overlayBeforeId();
+    map.addLayer({
+      id: 'flood-heat', type: 'heatmap', source: 'reports', maxzoom: 16,
+      filter: ['==', ['get', 'active'], true],
+      paint: {
+        'heatmap-weight': ['/', ['get', 'level'], 4],
+        'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 1, 15, 2.2],
+        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 16, 15, 44],
+        'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0.9, 15.8, 0],
+        'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'],
+          0, 'rgba(0,0,0,0)', 0.2, 'rgba(14,165,233,0.35)', 0.45, 'rgba(56,225,255,0.6)', 0.7, 'rgba(250,204,21,0.75)', 1, 'rgba(244,63,94,0.9)']
+      }
+    }, before);
+    map.addLayer({
+      id: 'flood-pool', type: 'circle', source: 'reports',
+      filter: ['==', ['get', 'active'], true],
+      paint: {
+        'circle-radius': radiusExpr(1),
+        'circle-color': ['get', 'color'],
+        'circle-opacity': ['case', ['==', ['get', 'stale'], true], 0.1, 0.26],
+        'circle-blur': 0.35,
+        'circle-stroke-color': ['get', 'color'],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-opacity': ['case', ['==', ['get', 'stale'], true], 0.25, 0.6],
+        'circle-pitch-alignment': 'map',
+        'circle-pitch-scale': 'map'
+      }
+    }, before);
+    map.addLayer({
+      id: 'flood-ring', type: 'circle', source: 'reports',
+      filter: ['==', ['get', 'pulse'], true],
+      paint: {
+        'circle-radius': radiusExpr(1),
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': ['get', 'color'],
+        'circle-stroke-width': 2,
+        'circle-stroke-opacity': 0.8,
+        'circle-pitch-alignment': 'map',
+        'circle-pitch-scale': 'map'
+      }
+    }, before);
+  }
+
+  // คลื่นกระเพื่อมรอบจุดน้ำขัง
+  let lastRing = 0;
+  function animateRing(now) {
+    if (now - lastRing > (LITE ? 120 : 80) && !document.hidden && !map.isMoving() && map.getLayer('flood-ring')) {
+      lastRing = now;
+      const t = (now % 2400) / 2400;
+      map.setPaintProperty('flood-ring', 'circle-radius', radiusExpr(1 + t * 1.3));
+      map.setPaintProperty('flood-ring', 'circle-stroke-opacity', 0.85 * (1 - t));
+    }
+    requestAnimationFrame(animateRing);
+  }
+  if (!reduceMotion) requestAnimationFrame(animateRing);
+
+  function renderMapData() {
+    const src = map.getSource('reports');
+    if (!src) return;
+    src.setData({
+      type: 'FeatureCollection',
+      features: reports().filter(isVisible).map((r) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+        properties: {
+          id: r.id,
+          level: r.level || 2,
+          r: levelOf(r) ? levelOf(r).radius : 18,
+          color: colorOf(r),
+          active: !isCleared(r),
+          stale: isStale(r),
+          pulse: isActive(r)
+        }
+      }))
+    });
+  }
+
+  /* ---------- หมุด (DOM marker + popup) ---------- */
+  const markers = new Map();   // id -> { marker, el, key }
+
+  function pinHtml(r) {
+    return `<div class="pin-body">${icon(isCleared(r) ? 'check' : 'droplet', 15)}</div>` +
+      (r.confirms > 0 ? `<span class="pin-badge">${r.confirms}</span>` : '');
+  }
+  function stylePin(el, r) {
+    el.className = 'pin' + (isActive(r) ? ' live' : '') + (isStale(r) ? ' stale' : '');
+    el.style.setProperty('--c', colorOf(r));
+    el.setAttribute('aria-label', r.place + ' — ' + (isCleared(r) ? 'น้ำลดแล้ว' : (levelOf(r) ? levelOf(r).label : 'มีน้ำขัง')));
+    el.innerHTML = pinHtml(r);
+  }
+
+  function renderPins() {
+    const seen = new Set();
+    reports().forEach((r) => {
+      if (!isVisible(r)) return;
+      seen.add(r.id);
+      const key = [r.status, r.level, r.confirms, isStale(r), isActive(r)].join('|');
+      let m = markers.get(r.id);
+      if (!m) {
+        // el ด้านนอกเป็นของ MapLibre (มีคลาสจัดตำแหน่ง) ห้ามเขียนทับ className — ตกแต่งที่ div ด้านในแทน
+        const outer = document.createElement('div');
+        const el = document.createElement('div');
+        outer.appendChild(el);
+        stylePin(el, r);
+        const popup = new maplibregl.Popup({ offset: 44, maxWidth: '320px', className: 'fw-popup', focusAfterOpen: false });
+        popup.on('open', () => popup.setHTML(popupHtml(byId.get(r.id))));
+        const marker = new maplibregl.Marker({ element: outer, anchor: 'bottom' }).setLngLat([r.lng, r.lat]).setPopup(popup).addTo(map);
+        markers.set(r.id, { marker, el, key });
+      } else {
+        if (m.key !== key) { stylePin(m.el, r); m.key = key; }
+        const p = m.marker.getPopup();
+        if (p && p.isOpen()) p.setHTML(popupHtml(r));
+      }
+    });
+    markers.forEach((m, id) => {
+      if (!seen.has(id)) { m.marker.remove(); markers.delete(id); }
+    });
+  }
+
+  function popupHtml(r) {
+    if (!r) return '';
+    return `<div class="pop">
+      ${r.image ? `<button type="button" class="pop-img" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="ภาพจุดน้ำขัง"></button>` : ''}
+      <div class="pop-body" style="--c:${colorOf(r)}">
+        <div class="tags">${tagsHtml(r)}</div>
+        <h3>${esc(r.place)}</h3>
+        ${r.desc ? `<p>${esc(r.desc)}</p>` : ''}
+        <div class="pop-meta">${r.pending ? 'กำลังส่ง…' : timeAgo(r.time) + ' · ' + clock(r.time) + ' น.'}${isStale(r) ? ' · อาจไม่เป็นปัจจุบัน' : ''}</div>
+        <div class="acts">${actsHtml(r)}</div>
+      </div>
+    </div>`;
+  }
+
+  function tagsHtml(r) {
+    const L = levelOf(r);
+    let h = isCleared(r)
+      ? `<span class="tag" style="--c:${CLEARED_COLOR}">${icon('check', 11)}น้ำลดแล้ว</span>`
+      : `<span class="tag" style="--c:#ff5a6e">● ยังมีน้ำขัง</span>`;
+    if (L) h += `<span class="tag" style="--c:${L.color}">${L.label} · ${L.range}</span>`;
+    if (r.demo) h += '<span class="tag plain">ตัวอย่าง</span>';
+    return h;
+  }
+  function actsHtml(r) {
+    const on = confirmedSet.has(r.id);
+    return `<button type="button" class="act${on ? ' on' : ''}" data-confirm="${esc(r.id)}" aria-pressed="${on}" title="ยืนยันว่าจุดนี้มีน้ำขังจริง">${icon('thumb', 13)}ยืนยัน ${r.confirms}</button>` +
+      (isCleared(r) ? '' : `<button type="button" class="act" data-clear="${esc(r.id)}">${icon('check', 13)}น้ำลดแล้ว?</button>`);
+  }
+
+  function focusReport(id) {
+    const r = byId.get(id);
+    const m = markers.get(id);
+    if (!r || !m) { toast('รายงานนี้ถูกซ่อนด้วยตัวกรอง'); return; }
+    stopOrbit();
+    if (isNarrow()) setSheet('peek');
+    const p = m.marker.getPopup();
+    let done = false;
+    const open = () => { if (!done) { done = true; if (!p.isOpen()) m.marker.togglePopup(); } };
+    map.once('moveend', open);
+    setTimeout(open, 1800);
+    map.flyTo({
+      center: [r.lng, r.lat], zoom: Math.max(map.getZoom(), 17.2), pitch: is3D ? 55 : 0,
+      offset: isNarrow() ? [0, -60] : [Math.round(sheet.offsetWidth / 2), 60],
+      duration: reduceMotion ? 0 : 1500, essential: true
+    });
+  }
+
+  /* ---------- ชื่อสถานที่ใกล้จุด (อ่านจากป้ายชื่อบนแผนที่ OSM) ---------- */
+  function nearestPlace(lngLat) {
+    try {
+      const p = map.project(lngLat);
+      const feats = map.queryRenderedFeatures([[p.x - 110, p.y - 110], [p.x + 110, p.y + 110]]);
+      let best = null, bd = Infinity;
+      feats.forEach((f) => {
+        if (f.layer.type !== 'symbol') return;
+        const pr = f.properties || {};
+        const name = pr.name || pr['name:th'] || pr['name:en'] || pr.name_en;
+        if (!name) return;
+        const pts = flatCoords(f.geometry);
+        let d = Infinity;
+        pts.forEach((c) => {
+          const q = map.project(c);
+          d = Math.min(d, Math.hypot(q.x - p.x, q.y - p.y));
+        });
+        if (f.geometry.type !== 'Point') d += 30;     // ให้ชื่ออาคาร/สถานที่มาก่อนชื่อถนน
+        if (/transit|bus|station/i.test(f.layer.id + ' ' + (pr.class || '') + ' ' + (pr.subclass || ''))) d += 70;   // ป้ายรถเมล์ไม่ใช่ชื่อสถานที่ที่ดี
+        if (d < bd) { bd = d; best = String(name); }
+      });
+      if (best) return (bd > 60 ? 'ใกล้ ' : '') + best;
+    } catch (e) { /* ignore */ }
+    return 'มธ. ศูนย์รังสิต';
+  }
+  function flatCoords(g) {
+    if (!g) return [];
+    if (g.type === 'Point') return [g.coordinates];
+    if (g.type === 'LineString' || g.type === 'MultiPoint') return g.coordinates;
+    if (g.type === 'MultiLineString' || g.type === 'Polygon') return [].concat(...g.coordinates);
+    return [];
+  }
+
+  /* ---------- ภาพยนตร์เปิดตัว + หมุนรอบวิทยาเขต ---------- */
+  let orbiting = false;
+  function startOrbit() {
+    if (reduceMotion || orbiting) return;
+    orbiting = true;
+    const step = () => {
+      if (!orbiting) return;
+      map.setBearing(map.getBearing() + 0.035);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  function stopOrbit() { orbiting = false; }
+  ['mousedown', 'touchstart', 'wheel', 'dragstart'].forEach((ev) => map.on(ev, stopOrbit));
+
+  const homeView = () => ({
+    center: TU_CENTER, zoom: isNarrow() ? 15.2 : 15.8, pitch: is3D ? 58 : 0, bearing: -28,
+    offset: isNarrow() ? [0, -80] : [Math.round((sheet.offsetWidth + 16) / 2), 0]
+  });
+
+  let introDone = false;
+  function intro() {
+    if (introDone) return;
+    introDone = true;
+    $('splash').classList.add('out');
+    if (window.gsap && !reduceMotion) {
+      gsap.from('.sheet', { opacity: 0, duration: 0.9, ease: 'power2.out', delay: 0.2 });
+      gsap.from('.sheet-scroll > *, .sheet-grab', { y: 22, opacity: 0, duration: 0.8, stagger: 0.07, ease: 'expo.out', delay: 0.35, clearProps: 'transform,opacity' });
+      gsap.from('.tool-group', { x: 30, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'expo.out', delay: 0.5, clearProps: 'transform,opacity' });
+      gsap.from('.fab', { y: 40, opacity: 0, duration: 0.8, ease: 'back.out(1.6)', delay: 0.9, clearProps: 'transform,opacity' });
+    }
+    if (reduceMotion) { map.jumpTo(homeView()); return; }
+    map.flyTo(Object.assign(homeView(), { duration: 4200, curve: 1.5, essential: true }));
+    map.once('moveend', () => { if (!body.classList.contains('picking')) startOrbit(); });
+  }
+  map.once('load', () => setTimeout(intro, 350));
+  setTimeout(intro, 7000);    // กันกรณีแผนที่โหลดช้ามาก
+
+  /* ---------- ปุ่มเครื่องมือ ---------- */
+  $('zoomIn').addEventListener('click', () => { stopOrbit(); map.zoomIn(); });
+  $('zoomOut').addEventListener('click', () => { stopOrbit(); map.zoomOut(); });
+  $('btnHome').addEventListener('click', () => { stopOrbit(); map.flyTo(Object.assign(homeView(), { duration: 1600 })); });
+  $('btn3d').addEventListener('click', () => {
+    is3D = !is3D;
+    $('btn3d').setAttribute('aria-pressed', String(is3D));
+    $('btn3d').querySelector('.t3d').textContent = is3D ? '3D' : '2D';
+    map.easeTo({ pitch: is3D ? 58 : 0, bearing: is3D ? map.getBearing() : 0, duration: 900 });
+  });
+
+  let meMarker = null;
+  function locate(cb) {
+    if (!navigator.geolocation) { toast('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง'); return; }
+    toast('กำลังหาตำแหน่งของคุณ…', 8000);
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const ll = [pos.coords.longitude, pos.coords.latitude];
+      if (!meMarker) {
+        const el = document.createElement('div');
+        el.className = 'me-dot';
+        meMarker = new maplibregl.Marker({ element: el }).setLngLat(ll).addTo(map);
+      } else meMarker.setLngLat(ll);
+      if (distKm(ll, TU_CENTER) > MAX_DIST_KM) { toast('ตอนนี้คุณอยู่นอกพื้นที่มหาวิทยาลัย', 4000); return; }
+      toastEl.classList.remove('show');
+      stopOrbit();
+      map.flyTo({ center: ll, zoom: 17.5, duration: 1400 });
+      if (cb) cb(ll);
+    }, (err) => {
+      toast(err && err.code === 1 ? 'ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง' : 'หาตำแหน่งไม่สำเร็จ (ต้องเปิดเว็บผ่าน https)', 4500);
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+  }
+  $('btnLocate').addEventListener('click', () => locate());
+
+  // เรดาร์ฝนสดจาก RainViewer
+  $('btnRadar').addEventListener('click', async () => {
+    const btn = $('btnRadar');
+    if (radarOn) {
+      radarOn = false;
+      if (map.getLayer('radar')) map.setLayoutProperty('radar', 'visibility', 'none');
+      btn.setAttribute('aria-pressed', 'false');
+      return;
+    }
+    try {
+      if (!map.getSource('radar')) {
+        const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        const j = await res.json();
+        const frames = (j.radar && j.radar.past) || [];
+        const last = frames[frames.length - 1];
+        if (!last) throw new Error('no-frames');
+        map.addSource('radar', {
+          type: 'raster', tileSize: 256, maxzoom: 7,
+          tiles: [j.host + last.path + '/256/{z}/{x}/{y}/4/1_1.png'],
+          attribution: 'Radar © RainViewer'
+        });
+        map.addLayer({ id: 'radar', type: 'raster', source: 'radar', paint: { 'raster-opacity': 0.55 } }, 'flood-heat');
+        btn.dataset.time = last.time * 1000;
+      }
+      map.setLayoutProperty('radar', 'visibility', 'visible');
+      radarOn = true;
+      btn.setAttribute('aria-pressed', 'true');
+      toast('เรดาร์ฝน ณ เวลา ' + clock(Number(btn.dataset.time)) + ' น. — ซูมออกเพื่อดูกลุ่มฝน', 4500);
+    } catch (e) {
+      console.warn(e);
+      toast('โหลดเรดาร์ฝนไม่สำเร็จ');
+    }
+  });
+
+  /* =====================================================================
+     แผงข้อมูล (bottom sheet บนมือถือ)
+     ===================================================================== */
+  let sheetState = 'peek';
+  function peekHeight() {
+    return $('sheetGrab').offsetHeight + $('alertCard').offsetHeight + 22;
+  }
+  function snapY(state) {
+    const H = sheet.offsetHeight;
+    if (state === 'full') return 0;
+    if (state === 'half') return Math.max(0, H - window.innerHeight * 0.58);
+    return Math.max(0, H - peekHeight());
+  }
+  function setSheet(state) {
+    sheetState = state;
+    body.dataset.sheet = state;
+    document.documentElement.style.setProperty('--peek', peekHeight() + 'px');
+    if (isNarrow()) sheet.style.setProperty('--sheet-y', snapY(state) + 'px');
+    else sheet.style.removeProperty('--sheet-y');
+  }
+  window.addEventListener('resize', () => setSheet(sheetState));
+
+  (function wireSheetDrag() {
+    const grab = $('sheetGrab');
+    let startY = 0, startT = 0, lastY = 0, lastT = 0, vel = 0, dragging = false, moved = 0;
+    grab.addEventListener('pointerdown', (e) => {
+      if (!isNarrow()) return;
+      dragging = true; moved = 0;
+      startY = lastY = e.clientY; lastT = performance.now();
+      startT = snapY(sheetState);
+      sheet.classList.add('dragging');
+      grab.setPointerCapture(e.pointerId);
+    });
+    grab.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const now = performance.now();
+      vel = (e.clientY - lastY) / Math.max(1, now - lastT);
+      lastY = e.clientY; lastT = now;
+      moved = Math.max(moved, Math.abs(e.clientY - startY));
+      const y = clamp(startT + (e.clientY - startY), 0, snapY('peek'));
+      sheet.style.setProperty('--sheet-y', y + 'px');
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      sheet.classList.remove('dragging');
+      if (moved < 6) { setSheet(sheetState === 'peek' ? 'half' : 'peek'); return; }   // แตะ = สลับ
+      const y = startT + (lastY - startY);
+      if (vel > 0.6) { setSheet(sheetState === 'full' ? 'half' : 'peek'); return; }    // ปัดลงเร็ว
+      if (vel < -0.6) { setSheet(sheetState === 'peek' ? 'half' : 'full'); return; }   // ปัดขึ้นเร็ว
+      const opts = ['full', 'half', 'peek'].map((s) => [s, Math.abs(snapY(s) - y)]).sort((a, b) => a[1] - b[1]);
+      setSheet(opts[0][0]);
+    };
+    grab.addEventListener('pointerup', end);
+    grab.addEventListener('pointercancel', end);
+  })();
+
+  /* ---------- แท็บ / ตัวกรอง ---------- */
+  function showTab(name) {
+    $('tabFeed').setAttribute('aria-selected', String(name === 'feed'));
+    $('tabStats').setAttribute('aria-selected', String(name === 'stats'));
+    $('panelFeed').hidden = name !== 'feed';
+    $('panelStats').hidden = name !== 'stats';
+    if (name === 'stats') renderStats();
+    if (isNarrow() && sheetState === 'peek') setSheet('half');
+  }
+  $('tabFeed').addEventListener('click', () => showTab('feed'));
+  $('tabStats').addEventListener('click', () => showTab('stats'));
+
+  function wireSeg(id, apply) {
+    const seg = $(id);
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]');
+      if (!b) return;
+      seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      apply(b.dataset.v);
+      feedShown = FEED_PAGE;
+      renderAll();
+    });
+  }
+  wireSeg('statusSeg', (v) => { statusFilter = v; });
+  wireSeg('rangeSeg', (v) => { rangeFilter = v; });
+
+  /* ---------- การแสดงผล ---------- */
+  function renderAlert() {
+    const el = $('alertCard');
+    const active = reports().filter(isActive).sort((a, b) => (b.level || 0) - (a.level || 0) || b.time - a.time);
+    if (!active.length && listenError && !demoReports && !liveReports.length) {
+      // ห้ามบอกว่า "ไม่มีน้ำขัง" ในขณะที่ยังอ่านข้อมูลไม่ได้
+      el.className = 'alert';
+      el.style.setProperty('--alert-c', '#a9b6ca');
+      el.style.setProperty('--alert-bg', 'none');
+      el.innerHTML = `<div class="alert-ic">${icon('radar', 20)}</div><div class="alert-body">
+        <b>ยังโหลดข้อมูลรายงานไม่ได้</b><span>ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า สถานการณ์จริงอาจมีน้ำขังอยู่</span></div>`;
+      return;
+    }
+    if (!active.length) {
+      el.className = 'alert';
+      el.style.setProperty('--alert-c', 'var(--ok)');
+      el.style.setProperty('--alert-bg', 'linear-gradient(110deg, rgba(52,211,153,0.10), transparent 70%)');
+      el.innerHTML = `<div class="alert-ic">${icon(firstSnapshot && !demoReports ? 'radar' : 'shield', 20)}</div><div class="alert-body">
+        <b>${firstSnapshot && !demoReports ? 'กำลังตรวจสอบสถานการณ์…' : 'ไม่มีรายงานน้ำขังใน 24 ชั่วโมง'}</b>
+        <span>พบจุดน้ำขัง? กด "แจ้งน้ำขัง" เพื่อเตือนเพื่อน ๆ ได้ทันที</span></div>`;
+      return;
+    }
+    const worst = Math.max(...active.map((r) => r.level || 0));
+    const c = worst >= 3 ? '#f43f5e' : '#facc15';
+    const picks = [], seen = new Set();
+    for (const r of active) {
+      if (seen.has(r.place)) continue;
+      seen.add(r.place);
+      picks.push(r);
+      if (picks.length === 4) break;
+    }
+    el.className = 'alert hot';
+    el.style.setProperty('--alert-c', c);
+    el.style.setProperty('--alert-bg', `linear-gradient(110deg, ${c}26, transparent 75%)`);
+    el.innerHTML = `<div class="alert-ic">${icon('alert', 20)}</div><div class="alert-body">
+      <b>ขณะนี้มีน้ำขัง ${active.length} จุด${worst >= 3 ? ' · บางจุดสูงถึงเข่า' : ''}</b>
+      <span>${worst >= 3 ? 'ควรหลีกเลี่ยงเส้นทางต่อไปนี้' : 'เดินทางด้วยความระมัดระวัง'}</span>
+      <div class="chips">${picks.map((r) => `<button type="button" class="chip" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}"><span>${esc(r.place)}</span></button>`).join('')}</div>
+    </div>`;
+  }
+
+  function cardHtml(r, isNew) {
+    return `<article class="fcard${isStale(r) ? ' stale' : ''}${isNew ? ' enter' : ''}" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}" tabindex="0" aria-label="ดู ${esc(r.place)} บนแผนที่">
+      ${r.image
+        ? `<button type="button" class="thumb" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="" loading="lazy"></button>`
+        : `<div class="thumb empty">${icon(isCleared(r) ? 'check' : 'droplet', 24)}</div>`}
+      <div class="fbody">
+        <div class="ftop"><h3>${esc(r.place)}</h3>${r.pending ? '<span class="ftime">กำลังส่ง…</span>' : `<span class="ftime" data-ts="${r.time}">${timeAgo(r.time)}</span>`}</div>
+        <div class="tags">${tagsHtml(r)}</div>
+        ${r.desc ? `<p class="fdesc">${esc(r.desc)}</p>` : ''}
+        <div class="acts">${actsHtml(r)}</div>
+      </div>
+    </article>`;
+  }
+
+  function renderFeed(fresh) {
+    const list = reports().filter(isVisible).sort((a, b) => b.time - a.time);
+    $('feedCount').textContent = list.length;
+    const demoBtn = !demoReports && !liveReports.length
+      ? `<br><button type="button" class="btn" id="demoBtn" style="margin-top:14px">ดูตัวอย่างการแสดงผล</button>` : '';
+    if (feedNotice && !demoReports) {
+      feedEl.innerHTML = `<div class="empty">${esc(feedNotice)}${firstSnapshot ? '' : demoBtn}</div>`;
+      return;
+    }
+    if (!list.length) {
+      feedEl.innerHTML = `<div class="empty"><div class="big">🌤️</div>ไม่มีรายงานในช่วงเวลา/สถานะที่เลือก${demoBtn}</div>`;
+      return;
+    }
+    const rest = list.length - feedShown;
+    const scroller = $('sheetScroll');
+    const top = scroller.scrollTop;   // คงตำแหน่งเลื่อนไว้เมื่อมีข้อมูลอัปเดตเข้ามา
+    feedEl.innerHTML = list.slice(0, feedShown).map((r) => cardHtml(r, fresh && fresh.has(r.id))).join('') +
+      (rest > 0 ? `<button type="button" class="more">แสดงเพิ่ม (${rest})</button>` : '');
+    scroller.scrollTop = top;
+  }
+
+  function renderKPI() {
+    const all = reports();
+    const active = all.filter(isActive);
+    countTo($('kpiActive'), active.length);
+    countTo($('kpiSevere'), active.filter((r) => r.level >= 3).length);
+    countTo($('kpiCleared'), all.filter((r) => isCleared(r) && Date.now() - r.time <= RANGES[rangeFilter]).length);
+  }
+
+  function renderStats() {
+    const all = reports(), now = Date.now();
+    // กราฟรายชั่วโมง 24 ชม.
+    const buckets = new Array(24).fill(0);
+    all.forEach((r) => {
+      const h = Math.floor((now - r.time) / HOUR);
+      if (h >= 0 && h < 24) buckets[23 - h]++;
+    });
+    const max = Math.max(1, ...buckets);
+    const bw = 360 / 24;
+    $('histTotal').textContent = buckets.reduce((a, b) => a + b, 0) + ' รายงาน';
+    $('hist').innerHTML = `<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38e1ff"/><stop offset="1" stop-color="#0ea5e9" stop-opacity="0.35"/></linearGradient></defs>` +
+      buckets.map((v, i) => {
+        const h = v ? Math.max(4, (v / max) * 86) : 2;
+        return `<rect class="bar" x="${i * bw + 2}" y="${92 - h}" width="${bw - 4}" height="${h}" rx="3" fill="${v ? 'url(#hg)' : 'rgba(255,255,255,0.08)'}"><title>${v} รายงาน</title></rect>`;
+      }).join('') +
+      ['-24 ชม.', '-18', '-12', '-6', 'ตอนนี้'].map((t, i) =>
+        `<text x="${i === 4 ? 358 : i * 90 + 2}" y="107" font-size="9" fill="#6c7a92" text-anchor="${i === 4 ? 'end' : 'start'}">${t}</text>`).join('');
+
+    // สัดส่วนระดับน้ำ
+    const active = all.filter((r) => !isCleared(r) && now - r.time <= RANGES[rangeFilter]);
+    const counts = [1, 2, 3, 4].map((n) => active.filter((r) => r.level === n).length);
+    const tot = counts.reduce((a, b) => a + b, 0) || 1;
+    $('lvlStack').innerHTML = counts.map((c, i) => `<i style="width:${(c / tot) * 100}%; background:${LEVELS[i + 1].color}"></i>`).join('');
+    $('lvlLegend').innerHTML = counts.map((c, i) => `<span><i style="--c:${LEVELS[i + 1].color}"></i>${LEVELS[i + 1].label} ${c}</span>`).join('');
+
+    // จุดที่ถูกรายงานบ่อย
+    const freq = new Map();
+    all.filter((r) => now - r.time <= 7 * DAY).forEach((r) => {
+      const f = freq.get(r.place) || { n: 0, id: r.id };
+      f.n++;
+      freq.set(r.place, f);
+    });
+    const top = [...freq.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 5);
+    const tmax = top.length ? top[0][1].n : 1;
+    $('topPlaces').innerHTML = top.length
+      ? top.map(([place, f]) => `<div class="top-row" data-focus="${esc(f.id)}"><span>${esc(place)}</span><div><i style="width:${(f.n / tmax) * 100}%"></i></div><b>${f.n}</b></div>`).join('')
+      : '<div class="muted">ยังไม่มีข้อมูล</div>';
+  }
+
+  function renderAll(fresh) {
+    renderPins();
+    renderMapData();
+    renderFeed(fresh);
+    renderKPI();
+    renderAlert();
+    renderWeather();
+    if (!$('panelStats').hidden) renderStats();
+    $('demoPill').hidden = !demoReports;
+    setSheet(sheetState);
+  }
+
+  setInterval(() => {
+    document.querySelectorAll('.ftime[data-ts]').forEach((el) => { el.textContent = timeAgo(Number(el.dataset.ts)); });
+  }, 30000);
+  setInterval(() => { if (!feedNotice || demoReports) renderAll(); }, 5 * 60000);
+
+  /* ---------- สถานะการเชื่อมต่อ ---------- */
+  function updateSync() {
+    const el = $('live');
+    let state = '', msg = '';
+    if (listenError) { state = 'warn'; msg = listenError; }
+    else if (writeError) { state = 'warn'; msg = writeError; }
+    else if (serverSynced) state = 'ok';
+    else if (Date.now() - connectStart > 10000) { state = 'warn'; msg = 'ยังเชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — รายงานที่ส่งจะยังไม่ถึงคนอื่น'; }
+    el.className = 'live' + (state ? ' ' + state : '');
+    $('liveTxt').textContent = state === 'ok' ? 'LIVE' : state === 'warn' ? 'ออฟไลน์' : 'กำลังเชื่อมต่อ';
+    el.title = msg || (state === 'ok' ? 'เชื่อมต่อฐานข้อมูลแล้ว · อัปเดตแบบเรียลไทม์' : '');
+  }
+  setInterval(updateSync, 2000);
+
+  /* =====================================================================
+     สภาพอากาศ + ความเสี่ยงน้ำขัง
+     ===================================================================== */
+  function wxInfo(code) {
+    if (code === 0) return ['ท้องฟ้าแจ่มใส', 'sun'];
+    if (code <= 2) return ['มีเมฆบางส่วน', 'cloudSun'];
+    if (code <= 48) return ['เมฆมาก', 'cloud'];
+    if (code <= 57) return ['ฝนตกปรอย ๆ', 'rain'];
+    if (code <= 67) return ['ฝนตก', 'rain'];
+    if (code <= 77) return ['มีเมฆมาก', 'cloud'];
+    if (code <= 82) return ['ฝนตกเป็นช่วง ๆ', 'rain'];
+    return ['พายุฝนฟ้าคะนอง', 'storm'];
+  }
+
+  async function loadWeather() {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + TU_CENTER[1] + '&longitude=' + TU_CENTER[0] +
+      '&current=temperature_2m,precipitation,weather_code&hourly=precipitation_probability,precipitation&forecast_hours=7&timezone=Asia%2FBangkok';
+    try {
+      const j = await (await fetch(url)).json();
+      weather = {
+        temp: j.current.temperature_2m,
+        precip: Number(j.current.precipitation) || 0,
+        code: j.current.weather_code,
+        hours: j.hourly.time.map((t, i) => ({
+          t: t,
+          p: Number(j.hourly.precipitation_probability[i]) || 0,
+          mm: Number(j.hourly.precipitation[i]) || 0
+        }))
+      };
+    } catch (e) {
+      console.warn('โหลดสภาพอากาศไม่สำเร็จ', e);
+      weather = weather || false;
+    }
+    renderWeather();
+  }
+
+  // คะแนนความเสี่ยงแบบง่าย: โอกาสฝน 3 ชม. + ปริมาณฝน + จำนวนจุดน้ำขังตอนนี้
+  function riskScore() {
+    const h = weather ? weather.hours.slice(0, 3) : [];
+    const pmax = h.length ? Math.max(...h.map((x) => x.p)) : 0;
+    const mm = h.reduce((s, x) => s + x.mm, 0) + (weather ? weather.precip : 0);
+    const act = reports().filter(isActive).length;
+    return clamp(0.45 * (pmax / 100) + 0.35 * Math.min(1, mm / 15) + 0.2 * Math.min(1, act / 5), 0, 1);
+  }
+
+  function renderWeather() {
+    const el = $('weather');
+    if (weather === null) return;
+    const score = riskScore();
+    const risk = score < 0.3 ? ['ต่ำ', '#34d399'] : score < 0.6 ? ['ปานกลาง', '#facc15'] : ['สูง', '#f43f5e'];
+    const riskRow = `<div class="risk" style="--risk-c:${risk[1]}"><span>ความเสี่ยงน้ำขัง</span>
+      <div class="risk-meter"><i style="width:${Math.max(6, score * 100)}%"></i></div><b>${risk[0]}</b></div>`;
+    if (!weather) {
+      el.innerHTML = `<div class="muted">โหลดพยากรณ์ฝนไม่ได้ในขณะนี้</div>` + riskRow;
+      return;
+    }
+    const info = wxInfo(weather.code);
+    el.innerHTML = `<div class="wx-top">
+        <div class="wx-icon">${icon(info[1], 24)}</div>
+        <div><div class="wx-temp">${Math.round(weather.temp)}°</div><div class="wx-desc">${info[0]} · รังสิต</div></div>
+        <div class="wx-rain"><b>${weather.precip.toFixed(1)}</b><span>มม. ตอนนี้</span></div>
+      </div>
+      <div class="wx-label"><span>โอกาสฝน 6 ชั่วโมงข้างหน้า</span><span>Open-Meteo</span></div>
+      <div class="wx-bars">${weather.hours.slice(1, 7).map((h) =>
+        `<div class="wx-bar" title="${h.p}% · ${h.mm} มม."><div><i style="height:${Math.max(4, h.p)}%"></i></div><span>${h.t.slice(11, 13)}น.</span></div>`).join('')}</div>` + riskRow;
+    // ให้แถบสีไล่ระดับคงที่ไม่ว่าแถบจะยาวแค่ไหน
+    const meter = el.querySelector('.risk-meter');
+    if (meter) meter.style.setProperty('--rw', meter.offsetWidth + 'px');
+  }
+  loadWeather();
+  setInterval(loadWeather, 15 * 60000);
+
+  /* =====================================================================
+     แจ้งเหตุ: เลือกจุด → กรอกฟอร์ม → ส่ง
+     ===================================================================== */
+  function enterPick() {
+    stopOrbit();
+    map.getCanvas().focus();
+    markers.forEach((m) => { const p = m.marker.getPopup(); if (p && p.isOpen()) p.remove(); });
+    body.classList.add('picking');
+    $('pick').hidden = false;
+    const target = pending.lngLat || map.getCenter();
+    map.easeTo({ center: target, zoom: Math.max(map.getZoom(), 17.3), pitch: 0, bearing: 0, duration: 900 });
+    map.once('idle', updatePickPlace);
+  }
+  function exitPick() {
+    body.classList.remove('picking');
+    $('pick').hidden = true;
+    if (is3D) map.easeTo({ pitch: 55, duration: 900 });
+  }
+  function updatePickPlace() {
+    if (!body.classList.contains('picking')) return;
+    const c = map.getCenter();
+    const far = distKm([c.lng, c.lat], TU_CENTER) > MAX_DIST_KM;
+    $('pickPlace').textContent = far ? 'อยู่นอกพื้นที่มหาวิทยาลัย' : nearestPlace(c);
+  }
+  map.on('movestart', () => body.classList.add('moving'));
+  map.on('moveend', () => { body.classList.remove('moving'); updatePickPlace(); });
+
+  $('fab').addEventListener('click', enterPick);
+  $('pickCancel').addEventListener('click', exitPick);
+  $('pickGps').addEventListener('click', () => locate(() => map.once('idle', updatePickPlace)));
+  $('pickOk').addEventListener('click', () => {
+    const c = map.getCenter();
+    if (distKm([c.lng, c.lat], TU_CENTER) > MAX_DIST_KM) { toast('จุดนี้อยู่นอกพื้นที่มหาวิทยาลัย'); return; }
+    pending.lngLat = c;
+    $('placeInput').value = nearestPlace(c).slice(0, MAX_PLACE);
+    exitPick();
+    openDialog();
+  });
+
+  function openDialog() {
+    $('dialog').hidden = false;
+    $('formError').hidden = true;
+    updateLevelUI();
+  }
+  function closeDialog() { $('dialog').hidden = true; }
+  $('dlgClose').addEventListener('click', closeDialog);
+  $('dialog').addEventListener('click', (e) => { if (e.target === $('dialog')) closeDialog(); });
+  $('changeLoc').addEventListener('click', () => { closeDialog(); enterPick(); });
+
+  // ตัวเลือกระดับน้ำ + ภาพคนยืนในน้ำ
+  $('levelList').innerHTML = [1, 2, 3, 4].map((n) => {
+    const L = LEVELS[n];
+    return `<button type="button" class="lvl" role="radio" aria-checked="false" data-level="${n}" style="--c:${L.color}">
+      <span class="lvl-dot">${n}</span><span><b>${L.label}</b><small>${L.range} · ${L.note}</small></span></button>`;
+  }).join('');
+  $('levelList').addEventListener('click', (e) => {
+    const b = e.target.closest('.lvl');
+    if (!b) return;
+    pending.level = Number(b.dataset.level);
+    $('formError').hidden = true;
+    updateLevelUI();
+  });
+  function updateLevelUI() {
+    const L = LEVELS[pending.level];
+    const water = $('water');
+    water.style.transform = 'translateY(' + (L ? L.wy : 215) + 'px)';
+    water.style.setProperty('--wc', L ? L.color : 'var(--aqua)');
+    $('levelList').querySelectorAll('.lvl').forEach((b) =>
+      b.setAttribute('aria-checked', String(Number(b.dataset.level) === pending.level)));
+  }
+
+  $('descInput').maxLength = MAX_DESC;
+  $('placeInput').maxLength = MAX_PLACE;
+  $('descInput').addEventListener('input', () => { $('descCount').textContent = $('descInput').value.length; });
+
+  // แนบรูป (ย่อก่อนบันทึก)
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let scale = Math.min(1, IMG_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+          let quality = 0.7, out = '';
+          for (let i = 0; i < 6; i++) {
+            const w = Math.max(1, Math.round(img.naturalWidth * scale));
+            const h = Math.max(1, Math.round(img.naturalHeight * scale));
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            out = c.toDataURL('image/jpeg', quality);
+            if (out.length <= IMG_MAX_CHARS) break;
+            quality = Math.max(0.4, quality - 0.1);
+            scale *= 0.8;
+          }
+          URL.revokeObjectURL(url);
+          if (out.length > IMG_MAX_CHARS) reject(new Error('too-large')); else resolve(out);
+        } catch (err) { URL.revokeObjectURL(url); reject(err); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode-failed')); };
+      img.src = url;
+    });
+  }
+  function clearImage() {
+    pending.image = '';
+    pending.imageTask = null;
+    $('imgInput').value = '';
+    $('previewImg').removeAttribute('src');
+    $('preview').hidden = true;
+    $('uploadBox').hidden = false;
+  }
+  $('imgInput').addEventListener('change', () => {
+    const file = $('imgInput').files && $('imgInput').files[0];
+    if (!file) return;
+    const task = compressImage(file).then((dataUrl) => {
+      if (pending.imageTask !== task) return;   // ผู้ใช้เปลี่ยน/ลบรูปไปแล้ว
+      pending.image = dataUrl;
+      $('previewImg').src = dataUrl;
+      $('preview').hidden = false;
+      $('uploadBox').hidden = true;
+    }).catch(() => {
+      if (pending.imageTask !== task) return;
+      clearImage();
+      toast('อ่านรูปนี้ไม่ได้ ลองเลือกรูปอื่น');
+    });
+    pending.imageTask = task;
+  });
+  $('removeImg').addEventListener('click', clearImage);
+  $('imgInput').addEventListener('dragenter', () => $('uploadBox').classList.add('drag'));
+  ['dragleave', 'drop'].forEach((ev) => $('imgInput').addEventListener(ev, () => $('uploadBox').classList.remove('drag')));
+
+  function resetForm() {
+    pending.lngLat = null;
+    pending.level = 0;
+    $('descInput').value = '';
+    $('descCount').textContent = '0';
+    $('placeInput').value = '';
+    clearImage();
+    updateLevelUI();
+  }
+
+  async function submitReport() {
+    if (sending) return;
+    if (!pending.lngLat) { closeDialog(); enterPick(); return; }
+    if (!pending.level) {
+      $('formError').textContent = 'กรุณาเลือกระดับน้ำก่อนส่งรายงาน';
+      $('formError').hidden = false;
+      return;
+    }
+    if (demoReports) { toast('ออกจากโหมดตัวอย่างก่อนส่งรายงานจริง'); return; }
+    if (!fs) { toast('ยังเชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณารีเฟรชหน้า'); return; }
+
+    sending = true;
+    const btn = $('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'กำลังส่ง…';
+    try {
+      if (pending.imageTask) await pending.imageTask.catch(() => {});   // รอให้ย่อรูปเสร็จก่อน
+      const ll = pending.lngLat;
+      const doc = {
+        lat: Math.round(ll.lat * 1e6) / 1e6,
+        lng: Math.round(ll.lng * 1e6) / 1e6,
+        level: pending.level,
+        place: ($('placeInput').value.trim() || 'มธ. ศูนย์รังสิต').slice(0, MAX_PLACE),
+        detail: $('descInput').value.trim().slice(0, MAX_DESC),
+        imageUrl: pending.image,
+        status: 'active',
+        confirms: 0,
+        timestamp: fs.serverTimestamp()
+      };
+      const res = await withTimeout(fs.addDoc(fs.collection(db, COLLECTION), doc), 10000);
+      if (res !== TIMEOUT && writeError) { writeError = ''; updateSync(); }
+      toast(res === TIMEOUT
+        ? 'เครือข่ายช้า ระบบจะส่งรายงานให้เมื่อเชื่อมต่อได้'
+        : 'ส่งรายงานสำเร็จ ขอบคุณที่ช่วยแจ้งเตือน 💧', res === TIMEOUT ? 6000 : 3500);
+      closeDialog();
+      map.flyTo({ center: [doc.lng, doc.lat], zoom: 17.5, pitch: is3D ? 55 : 0, duration: 1400 });
+      resetForm();
+    } catch (err) {
+      console.error('ส่งรายงานไม่สำเร็จ:', err);
+      noteWriteError(err);
+      toast(errorText(err), 7000);
+    } finally {
+      sending = false;
+      btn.disabled = false;
+      btn.textContent = 'ส่งรายงาน';
+    }
+  }
+  $('submitBtn').addEventListener('click', submitReport);
+
+  /* ---------- ยืนยัน / น้ำลดแล้ว ---------- */
+  function refreshViews() {
+    renderFeed();
+    renderPins();
+  }
+
+  async function toggleConfirm(id) {
+    const r = byId.get(id);
+    if (!r) return;
+    const wasOn = confirmedSet.has(id);
+    if (wasOn) confirmedSet.delete(id); else confirmedSet.add(id);
+    saveConfirmed();
+    if (r.demo) { r.confirms += wasOn ? -1 : 1; refreshViews(); return; }
+    if (!fs) { toast('ยังเชื่อมต่อฐานข้อมูลไม่สำเร็จ'); return; }
+    refreshViews();
+    try {
+      const res = await withTimeout(fs.updateDoc(fs.doc(db, COLLECTION, id), { confirms: fs.increment(wasOn ? -1 : 1) }), 8000);
+      if (!wasOn && res !== TIMEOUT) toast('ขอบคุณที่ช่วยยืนยันข้อมูล');
+    } catch (err) {
+      console.error(err);
+      if (wasOn) confirmedSet.add(id); else confirmedSet.delete(id);   // ย้อนสถานะปุ่มกลับ
+      saveConfirmed();
+      refreshViews();
+      noteWriteError(err);
+      toast(errorText(err), 7000);
+    }
+  }
+
+  async function markCleared(id) {
+    const r = byId.get(id);
+    if (!r || isCleared(r)) return;
+    if (r.demo) { r.status = 'cleared'; renderAll(); toast('อัปเดตเป็น "น้ำลดแล้ว" (ตัวอย่าง)'); return; }
+    if (!fs) { toast('ยังเชื่อมต่อฐานข้อมูลไม่สำเร็จ'); return; }
+    try {
+      const res = await withTimeout(fs.updateDoc(fs.doc(db, COLLECTION, id), { status: 'cleared' }), 8000);
+      toast(res === TIMEOUT ? 'เครือข่ายช้า ระบบจะอัปเดตให้เมื่อเชื่อมต่อได้' : 'อัปเดตเป็น "น้ำลดแล้ว" ขอบคุณครับ');
+    } catch (err) {
+      console.error(err);
+      noteWriteError(err);
+      toast(errorText(err), 7000);
+    }
+  }
+
+  // กดครั้งแรก = ถาม, กดซ้ำภายใน 3 วินาที = เปลี่ยนสถานะจริง (กันกดพลาด)
+  function armClear(btn) {
+    if (btn.dataset.armed) { markCleared(btn.dataset.clear); return; }
+    btn.dataset.armed = '1';
+    btn.classList.add('armed');
+    btn.textContent = 'แตะอีกครั้งเพื่อยืนยัน';
+    setTimeout(() => {
+      if (!btn.isConnected) return;
+      delete btn.dataset.armed;
+      btn.classList.remove('armed');
+      btn.innerHTML = icon('check', 13) + 'น้ำลดแล้ว?';
+    }, 3000);
+  }
+
+  /* ---------- Lightbox ---------- */
+  function openLightbox(id) {
+    const r = byId.get(id);
+    if (!r || !r.image) return;
+    $('lbImg').src = r.image;
+    $('lightbox').hidden = false;
+  }
+  $('lightbox').addEventListener('click', () => { $('lightbox').hidden = true; $('lbImg').removeAttribute('src'); });
+
+  // ปุ่มทั้งหมดในฟีด, popup, แบนเนอร์ และสถิติ ใช้ตัวจัดการเดียวกัน
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    let el;
+    if ((el = t.closest('[data-confirm]'))) { toggleConfirm(el.dataset.confirm); return; }
+    if ((el = t.closest('[data-clear]'))) { armClear(el); return; }
+    if ((el = t.closest('[data-zoom]'))) { openLightbox(el.dataset.zoom); return; }
+    if ((el = t.closest('.more'))) { feedShown += FEED_PAGE; renderFeed(); return; }
+    if (t.closest('#demoBtn')) { startDemo(); return; }
+    if ((el = t.closest('[data-focus]'))) focusReport(el.dataset.focus);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!$('lightbox').hidden) { $('lightbox').hidden = true; return; }
+      if (!$('dialog').hidden) { closeDialog(); return; }
+      if (body.classList.contains('picking')) { exitPick(); return; }
+    }
+    const card = e.target.closest && e.target.closest('.fcard');
+    if (card && e.target === card && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      focusReport(card.dataset.focus);
+    }
+  });
+
+  /* ---------- โหมดตัวอย่าง (ข้อมูลสมมุติ ไม่บันทึกลงฐานข้อมูล) ---------- */
+  function startDemo() {
+    const now = Date.now();
+    const spots = [
+      [0.0016, -0.0021, 4, 'ทางเดินหน้าอาคารเรียนรวม (ตัวอย่าง)', 'น้ำสูงเกือบถึงเอว รถทุกชนิดผ่านไม่ได้', 14],
+      [-0.0012, 0.0014, 3, 'ลานจอดรถหน้าคณะ (ตัวอย่าง)', 'น้ำท่วมถึงเข่า รถเก๋งดับไปแล้ว 1 คัน', 9],
+      [0.0031, 0.0026, 2, 'ถนนภายในหน้าหอพัก (ตัวอย่าง)', 'น้ำขังครึ่งแข้ง มอเตอร์ไซค์ควรเลี่ยง', 5],
+      [-0.0028, -0.0034, 1, 'ทางเท้าหน้าโรงอาหาร (ตัวอย่าง)', 'น้ำขังเล็กน้อย เดินผ่านได้แต่ลื่น', 3],
+      [0.0004, 0.0042, 3, 'อุโมงค์ทางลอด (ตัวอย่าง)', 'น้ำระบายไม่ทัน สูงประมาณ 40 ซม.', 11],
+      [-0.0041, 0.0008, 2, 'ป้ายรถตู้ฝั่งประตู (ตัวอย่าง)', 'เมื่อเช้าน้ำขัง ตอนนี้ลดแล้ว', 4]
+    ];
+    demoReports = spots.map((s, i) => ({
+      id: 'demo-' + i, demo: true,
+      lat: TU_CENTER[1] + s[0], lng: TU_CENTER[0] + s[1],
+      level: s[2], place: s[3], desc: s[4], confirms: s[5], image: '',
+      status: i === 5 ? 'cleared' : 'active',
+      time: now - (i * 2.4 + 0.4) * HOUR, pending: false
+    }));
+    byId = new Map(demoReports.map((r) => [r.id, r]));
+    renderAll(new Set(demoReports.map((r) => r.id)));
+    map.flyTo(Object.assign(homeView(), { duration: 1500 }));
+    toast('เปิดโหมดตัวอย่าง — ข้อมูลทั้งหมดเป็นข้อมูลสมมุติ', 4500);
+  }
+  $('demoExit').addEventListener('click', () => {
+    demoReports = null;
+    byId = new Map(liveReports.map((r) => [r.id, r]));
+    renderAll();
+  });
+
+  /* ---------- แจ้งเตือนเมื่อมีรายงานใหม่ ---------- */
+  function renderNotifyBtn() { $('btnNotify').setAttribute('aria-pressed', String(notifyOn)); }
+  $('btnNotify').addEventListener('click', async () => {
+    if (notifyOn) {
+      notifyOn = false;
+      toast('ปิดการแจ้งเตือนแล้ว');
+    } else {
+      let perm = 'unsupported';
+      if ('Notification' in window) {
+        perm = Notification.permission;
+        if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { /* ignore */ } }
+      }
+      notifyOn = true;
+      toast(perm === 'granted'
+        ? 'เปิดแจ้งเตือนแล้ว จะเด้งเตือนเมื่อมีน้ำขังจุดใหม่ (เปิดหน้านี้ทิ้งไว้)'
+        : 'จะแจ้งเตือนในหน้าเว็บ (เบราว์เซอร์ไม่อนุญาตการแจ้งเตือนระบบ)', 5000);
+    }
+    saveFlag(NOTIFY_KEY, notifyOn);
+    renderNotifyBtn();
+  });
+
+  function announce(list) {
+    if (!list.length) return;
+    const r = list[0];
+    const L = levelOf(r);
+    const msg = 'น้ำขังใหม่: ' + r.place + (L ? ' · ' + L.label : '') + (list.length > 1 ? ' และอีก ' + (list.length - 1) + ' จุด' : '');
+    toast(msg, 5000);
+    if (document.hidden) {
+      unseen += list.length;
+      document.title = '(' + unseen + ') ' + baseTitle;
+    }
+    if (notifyOn && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const n = new Notification('TU Flood Watch', { body: msg + (r.desc ? '\n' + r.desc.slice(0, 80) : ''), tag: 'tufw-' + r.id });
+        n.onclick = () => { window.focus(); focusReport(r.id); n.close(); };
+      } catch (e) { /* บางเบราว์เซอร์มือถือสร้าง Notification ตรง ๆ ไม่ได้ */ }
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && unseen) { unseen = 0; document.title = baseTitle; }
+  });
+
+  /* =====================================================================
+     Firestore แบบเรียลไทม์
+     ===================================================================== */
+  function onData(snap) {
+    const next = [];
+    snap.docs.forEach((d) => {
+      const x = d.data({ serverTimestamps: 'estimate' });
+      const lat = Number(x.lat), lng = Number(x.lng);
+      if (!isFinite(lat) || !isFinite(lng)) return;
+      const ts = x.timestamp && typeof x.timestamp.toMillis === 'function' ? x.timestamp.toMillis() : Date.now();
+      const lv = Number(x.level);
+      next.push({
+        id: d.id, lat, lng,
+        level: LEVELS[lv] ? lv : 0,
+        place: String(x.place || 'มธ. ศูนย์รังสิต'),
+        desc: String(x.detail || ''),
+        image: safeImg(x.imageUrl),
+        status: x.status === 'cleared' ? 'cleared' : 'active',
+        confirms: Math.max(0, Number(x.confirms) || 0),
+        time: ts,
+        pending: !!(d.metadata && d.metadata.hasPendingWrites)
+      });
+    });
+
+    // รายงานที่เพิ่งเข้ามาหลังโหลดครั้งแรก: เล่นแอนิเมชัน และแจ้งเตือนถ้าเป็นของคนอื่น
+    const fresh = new Set(), incoming = [];
+    if (!firstSnapshot) next.forEach((r) => {
+      if (knownIds.has(r.id)) return;
+      fresh.add(r.id);
+      if (!r.pending && !isCleared(r)) incoming.push(r);   // pending = เราเพิ่งส่งเอง
+    });
+    next.forEach((r) => knownIds.add(r.id));
+    firstSnapshot = false;
+    feedNotice = '';
+    listenError = '';
+    serverSynced = !(snap.metadata && snap.metadata.fromCache);
+    liveReports = next;
+    if (!demoReports) {
+      byId = new Map(next.map((r) => [r.id, r]));
+      renderAll(fresh);
+    }
+    updateSync();
+    announce(incoming);
+  }
+
+  function onListenError(err) {
+    console.error('Firestore listen error:', err);
+    if (firstSnapshot) feedNotice = 'เชื่อมต่อฐานข้อมูลไม่ได้ (' + ((err && err.code) || 'unknown') + ')';
+    firstSnapshot = false;
+    listenError = 'อ่านข้อมูลไม่ได้: ' + ((err && err.code) || 'unknown') + (err && err.code === 'permission-denied' ? ' — Rules ยังไม่อนุญาตคอลเลกชัน ' + COLLECTION : '');
+    serverSynced = false;
+    renderAll();
+    updateSync();
+  }
+
+  async function connectFirebase() {
+    const [appMod, fsMod] = await Promise.all([
+      import(SDK_BASE + 'firebase-app.js'),
+      import(SDK_BASE + 'firebase-firestore.js')
+    ]);
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    db = fsMod.initializeFirestore(app, { experimentalForceLongPolling: true });
+    fs = fsMod;
+    const q = fsMod.query(fsMod.collection(db, COLLECTION), fsMod.orderBy('timestamp', 'desc'), fsMod.limit(FEED_LIMIT));
+    fsMod.onSnapshot(q, { includeMetadataChanges: true }, onData, onListenError);
+  }
+
+  /* ---------- เริ่มทำงาน ---------- */
+  renderNotifyBtn();
+  updateLevelUI();
+  renderAll();
+  updateSync();
+  connectFirebase().catch((err) => {
+    console.error('โหลด Firebase SDK ไม่สำเร็จ:', err);
+    feedNotice = 'เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า';
+    firstSnapshot = false;
+    listenError = 'โหลดระบบฐานข้อมูลไม่สำเร็จ';
+    renderAll();
+    updateSync();
+  });
+})();
+</script>
+</body>
+</html>
