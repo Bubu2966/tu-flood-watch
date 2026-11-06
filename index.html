@@ -1170,39 +1170,34 @@
      ข้อมูลถนน/ลานจอดอ่านจาก OpenStreetMap ที่แผนที่โหลดอยู่แล้ว (ไม่ต้องใช้ API เพิ่ม)
      ===================================================================== */
   const VSRC = 'openmaptiles';
-  const CAMPUS = { type: 'Polygon', coordinates: [[[100.5925, 14.0575], [100.6195, 14.0575], [100.6195, 14.0835], [100.5925, 14.0835], [100.5925, 14.0575]]] };
   const EMPTY_FC = { type: 'FeatureCollection', features: [] };
-  const NO_DATA = '#64748b';
+  const NO_DATA = '#a3b1c6';
   const TRAFFIC_CATS = ['traffic', 'blocking', 'accident'];
   const zoomLin = (a, b, c, d) => ['interpolate', ['exponential', 1.6], ['zoom'], a, b, c, d];
 
   function addCampusLayers(before) {
     if (!map.getSource(VSRC) || map.getSource('lots')) return;   // แผนที่ภาพสำรองไม่มีข้อมูลถนน
     ['history', 'lots', 'jams'].forEach((id) => map.addSource(id, { type: 'geojson', data: EMPTY_FC }));
-    const roads = ['all', ['in', ['get', 'class'], ['literal', ['minor', 'tertiary', 'secondary', 'primary']]], ['within', CAMPUS]];
+    const roads = ['in', ['get', 'class'], ['literal', ['minor', 'tertiary', 'secondary', 'primary']]];
     const add = (l) => { try { map.addLayer(l, before); } catch (e) { console.warn('layer', l.id, e); } };
     add({ id: 'campus-road-glow', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 13.5, filter: roads,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#38e1ff', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.2],
+      paint: { 'line-color': '#22d3ee', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.5],
         'line-width': zoomLin(14, 5, 18, 30), 'line-blur': zoomLin(14, 3, 18, 16) } });
     add({ id: 'campus-road-core', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 13.5, filter: roads,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#7dd3fc', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.5],
+      paint: { 'line-color': '#a5f3fc', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.85],
         'line-width': zoomLin(14, 0.8, 18, 2.4), 'line-dasharray': [2, 2] } });
     add({ id: 'lot-aisles', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 15,
-      filter: ['all', ['==', ['get', 'service'], 'parking_aisle'], ['within', CAMPUS]],
-      paint: { 'line-color': '#94a3b8', 'line-opacity': 0.3, 'line-width': zoomLin(15, 1, 18, 5) } });
+      filter: ['==', ['get', 'service'], 'parking_aisle'],
+      paint: { 'line-color': '#94a3b8', 'line-opacity': 0.5, 'line-width': zoomLin(15, 1, 18, 5) } });
     add({ id: 'history-glow', type: 'circle', source: 'history', minzoom: 13,
       paint: { 'circle-radius': radiusExpr(1), 'circle-color': ['get', 'color'], 'circle-opacity': 0.13, 'circle-blur': 0.85,
         'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
     add({ id: 'lot-pad', type: 'circle', source: 'lots', minzoom: 14.5,
-      paint: { 'circle-radius': radiusExpr(1), 'circle-color': ['get', 'color'], 'circle-opacity': ['case', ['get', 'known'], 0.34, 0.12],
-        'circle-blur': 0.25, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': ['case', ['get', 'known'], 2, 1],
-        'circle-stroke-opacity': ['case', ['get', 'known'], 0.9, 0.35], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
-    add({ id: 'lot-label', type: 'symbol', source: 'lots', minzoom: 15.6,
-      layout: { 'text-field': 'P', 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.6, 10, 18, 17],
-        'text-allow-overlap': true, 'text-ignore-placement': true },
-      paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#0a0e15', 'text-halo-width': 1.4, 'text-opacity': ['case', ['get', 'known'], 1, 0.55] } });
+      paint: { 'circle-radius': radiusExpr(1), 'circle-color': ['get', 'color'], 'circle-opacity': ['case', ['get', 'known'], 0.45, 0.2],
+        'circle-blur': 0.1, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': ['case', ['get', 'known'], 2.5, 1.5],
+        'circle-stroke-opacity': ['case', ['get', 'known'], 1, 0.75], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
     add({ id: 'jam-glow', type: 'line', source: 'jams', layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': ['get', 'color'], 'line-width': zoomLin(13, 6, 18, 36), 'line-blur': zoomLin(13, 3, 18, 18), 'line-opacity': 0.5 } });
     add({ id: 'jam-core', type: 'line', source: 'jams', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -1304,7 +1299,7 @@
       const hit = park.find((r) => distKm([r.lng, r.lat], l.c) <= 0.09);
       const L = hit ? levelOf(hit) : null;
       return { type: 'Feature', geometry: { type: 'Point', coordinates: l.c },
-        properties: { color: L ? L.color : NO_DATA, known: !!L, r: 15 } };
+        properties: { color: L ? L.color : NO_DATA, known: !!L, r: 20 } };
     }) });
     map.getSource('jams').setData({ type: 'FeatureCollection', features: buildJams() });
     lastJamTry = now;
