@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070b12">
-<title>TU Flood Watch — แผนที่ 3 มิติแจ้งเตือนน้ำขัง มธ. ศูนย์รังสิต</title>
+<title>TU Flood Watch — แจ้งน้ำขัง จราจร ที่จอดรถ มธ. ศูนย์รังสิต</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=Prompt:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -370,6 +370,23 @@
     opacity:0; visibility:hidden; transition:transform .4s cubic-bezier(.2,.9,.25,1), opacity .3s, visibility .3s;}
   #toast.show{transform:translate(-50%,0); opacity:1; visibility:visible;}
   #toast i{width:8px; height:8px; border-radius:50%; flex-shrink:0; background:var(--aqua); box-shadow:0 0 10px var(--aqua);}
+
+  /* ---------- ประเภทเหตุ (น้ำขัง / จราจร / ที่จอดรถ) ---------- */
+  .cat-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px;}
+  .cat{display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; padding:10px 4px 8px; border-radius:var(--r-md);
+    background:rgba(255,255,255,0.03); border:1px solid var(--line-2); color:var(--ink-2); font-size:11.5px; line-height:1.25; text-align:center; transition:all .18s;}
+  .cat .ico{color:var(--c);}
+  .cat:hover{border-color:var(--c);}
+  .cat[aria-checked="true"]{border-color:var(--c); color:var(--ink); background:color-mix(in srgb, var(--c) 14%, transparent); box-shadow:0 0 0 1px var(--c) inset;}
+  @media (max-width:420px){ .cat{font-size:10.5px; padding:9px 2px 7px;} }
+  .level-wrap.no-fig{grid-template-columns:1fr;}
+  .level-wrap.no-fig .figure{display:none;}
+  .park-row{display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); cursor:pointer; font-size:12.5px;}
+  .park-row:first-child{border-top:none;}
+  .park-row .pdot{width:26px; height:26px; border-radius:8px; display:grid; place-items:center; color:#06111b; background:var(--c); flex-shrink:0;}
+  .park-row span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .park-row b{color:var(--c); font-weight:600; font-size:12px;}
+  .park-row small{color:var(--ink-3); font-size:11px; margin-left:4px;}
 </style>
 </head>
 <body data-sheet="peek">
@@ -378,7 +395,7 @@
   <div class="splash-inner">
     <div class="splash-logo"><span class="ring"></span><span class="ring r2"></span><span data-icon="droplet" data-size="44"></span></div>
     <h1>TU FLOOD WATCH</h1>
-    <p>แผนที่แจ้งเตือนน้ำขัง · มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต</p>
+    <p>น้ำขัง · จราจร · ที่จอดรถ · มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต</p>
     <div class="splash-bar"><i></i></div>
   </div>
 </div>
@@ -393,7 +410,7 @@
       <div class="logo"><span data-icon="droplet" data-size="22"></span></div>
       <div class="brand-txt">
         <h1>TU Flood Watch</h1>
-        <p>แจ้งเตือนน้ำขัง · มธ. ศูนย์รังสิต</p>
+        <p>น้ำขัง · จราจร · ที่จอดรถ · มธ. รังสิต</p>
       </div>
       <span class="live" id="live" title=""><i></i><span id="liveTxt">กำลังเชื่อมต่อ</span></span>
     </div>
@@ -406,9 +423,9 @@
     </div>
     <div class="card" id="weather"><div class="muted">กำลังโหลดพยากรณ์ฝน…</div></div>
     <div class="kpis">
-      <div class="kpi" style="--c:#38e1ff"><b id="kpiActive">0</b><span>จุดน้ำขังตอนนี้</span></div>
-      <div class="kpi" style="--c:#f43f5e"><b id="kpiSevere">0</b><span>ถึงเข่าขึ้นไป</span></div>
-      <div class="kpi" style="--c:#34d399"><b id="kpiCleared">0</b><span>น้ำลดแล้ว</span></div>
+      <div class="kpi" style="--c:#38e1ff"><b id="kpiActive">0</b><span>น้ำขังตอนนี้</span></div>
+      <div class="kpi" style="--c:#fb923c"><b id="kpiSevere">0</b><span>จราจร/ที่จอดตอนนี้</span></div>
+      <div class="kpi" style="--c:#a78bfa"><b id="kpiCleared">0</b><span>รายงานสะสม</span></div>
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" id="tabFeed" aria-selected="true" data-tab="feed"><span data-icon="list" data-size="16"></span>รายงาน <span class="count" id="feedCount">0</span></button>
@@ -416,10 +433,16 @@
     </div>
     <div id="panelFeed">
       <div class="filters">
+        <div class="seg" id="catSeg" role="group" aria-label="ประเภท">
+          <button data-v="all" aria-pressed="true">ทุกประเภท</button>
+          <button data-v="flood" aria-pressed="false">น้ำขัง</button>
+          <button data-v="traffic" aria-pressed="false">จราจร</button>
+          <button data-v="parking" aria-pressed="false">ที่จอดรถ</button>
+        </div>
         <div class="seg" id="statusSeg" role="group" aria-label="สถานะ">
           <button data-v="all" aria-pressed="true">ทั้งหมด</button>
-          <button data-v="active" aria-pressed="false">ยังท่วม</button>
-          <button data-v="cleared" aria-pressed="false">น้ำลดแล้ว</button>
+          <button data-v="active" aria-pressed="false">ยังมีเหตุ</button>
+          <button data-v="cleared" aria-pressed="false">คลี่คลายแล้ว</button>
         </div>
         <div class="seg" id="rangeSeg" role="group" aria-label="ช่วงเวลา">
           <button data-v="24h" aria-pressed="false">24 ชม.</button>
@@ -433,6 +456,15 @@
       <div class="card">
         <div class="stat-title"><span>รายงานใน 24 ชั่วโมงที่ผ่านมา</span><span id="histTotal"></span></div>
         <svg class="hist" id="hist" viewBox="0 0 360 110" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="stat-title"><span>ประเภทรายงาน (ตามช่วงเวลาที่เลือก)</span></div>
+        <div class="lvl-stack" id="catStack"></div>
+        <div class="legend" id="catLegend"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="stat-title"><span>สถานะลานจอดรถล่าสุด</span><span class="muted" style="font-size:11px">ข้อมูลไม่เกิน 3 ชม.</span></div>
+        <div id="parkList"></div>
       </div>
       <div class="card" style="margin-top:12px">
         <div class="stat-title"><span>ระดับน้ำของจุดที่ยังท่วม</span></div>
@@ -457,16 +489,17 @@
     <button class="tool hide-pick" id="btnRadar" aria-pressed="false" aria-label="เรดาร์ฝน"><span data-icon="radar"></span><em>เรดาร์ฝนสด</em></button>
     <button class="tool" id="btnLocate" aria-label="ตำแหน่งของฉัน"><span data-icon="locate"></span><em>ตำแหน่งของฉัน</em></button>
     <button class="tool hide-pick" id="btnHome" aria-label="กลับไปที่ มธ."><span data-icon="home"></span><em>กลับไปที่ มธ.</em></button>
+    <button class="tool hide-pick" id="btnShare" aria-label="แชร์ลิงก์เว็บ"><span data-icon="share"></span><em>ชวนเพื่อนมาช่วยรายงาน</em></button>
   </div>
   <div class="tool-group glass hide-pick">
     <button class="tool" id="btnNotify" aria-pressed="false" aria-label="แจ้งเตือนรายงานใหม่"><span data-icon="bell"></span><em>แจ้งเตือนรายงานใหม่</em></button>
   </div>
 </div>
 
-<button class="fab" id="fab"><span class="fab-plus"><span data-icon="plus" data-size="18"></span></span>แจ้งน้ำขัง</button>
+<button class="fab" id="fab"><span class="fab-plus"><span data-icon="plus" data-size="18"></span></span>แจ้งเหตุ</button>
 
 <div class="pick" id="pick" hidden>
-  <div class="pick-hint glass"><span data-icon="move" data-size="16"></span>เลื่อนแผนที่ให้หมุดตรงจุดที่น้ำขัง</div>
+  <div class="pick-hint glass"><span data-icon="move" data-size="16"></span>เลื่อนแผนที่ให้หมุดตรงจุดที่เกิดเหตุ</div>
   <div class="pick-pin"><div class="pick-pin-body"><span data-icon="droplet" data-size="20"></span></div><div class="pick-shadow"></div></div>
   <div class="pick-bar glass">
     <div class="pick-place"><span data-icon="mapPin" data-size="22"></span><div><small>ตำแหน่งที่เลือก</small><b id="pickPlace">—</b></div></div>
@@ -481,16 +514,20 @@
 <div class="backdrop" id="dialog" hidden>
   <div class="dialog glass" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
     <div class="dlg-head">
-      <div><h2 id="dlgTitle">แจ้งจุดน้ำขัง</h2><p>รายงานจะขึ้นบนแผนที่ของทุกคนทันที</p></div>
+      <div><h2 id="dlgTitle">แจ้งเหตุ</h2><p>รายงานจะขึ้นบนแผนที่ของทุกคนทันที</p></div>
       <button class="icon-btn" id="dlgClose" aria-label="ปิด"><span data-icon="x"></span></button>
+    </div>
+    <div class="field">
+      <div class="lbl">ประเภทเหตุ</div>
+      <div class="cat-grid" id="catList" role="radiogroup" aria-label="ประเภทเหตุ"></div>
     </div>
     <div class="field">
       <label class="lbl" for="placeInput">สถานที่ <small>(แก้ไขได้)</small></label>
       <div class="place-row"><span data-icon="mapPin" data-size="18"></span><input id="placeInput" type="text" autocomplete="off" placeholder="เช่น หน้าอาคาร SC"><button type="button" class="link" id="changeLoc">เปลี่ยนจุด</button></div>
     </div>
     <div class="field">
-      <div class="lbl">ระดับน้ำ</div>
-      <div class="level-wrap">
+      <div class="lbl" id="levelLbl">ระดับน้ำ</div>
+      <div class="level-wrap" id="levelWrap">
         <svg class="figure" viewBox="0 0 120 210" aria-hidden="true">
           <g fill="#2b3a57">
             <circle cx="60" cy="22" r="13"/>
@@ -512,7 +549,7 @@
           </g>
           <line x1="0" y1="200" x2="120" y2="200" stroke="rgba(255,255,255,0.2)"/>
         </svg>
-        <div class="level-list" id="levelList" role="radiogroup" aria-label="ระดับน้ำ"></div>
+        <div class="level-list" id="levelList" role="radiogroup" aria-label="ระดับ"></div>
       </div>
     </div>
     <div class="field">
@@ -535,7 +572,7 @@
   </div>
 </div>
 
-<div class="lightbox" id="lightbox" hidden><img id="lbImg" alt="ภาพจุดน้ำขังขนาดใหญ่"></div>
+<div class="lightbox" id="lightbox" hidden><img id="lbImg" alt="ภาพจุดเกิดเหตุขนาดใหญ่"></div>
 <div id="toast" role="status"><i></i><span id="toastMsg"></span></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -598,6 +635,46 @@
   };
   const CLEARED_COLOR = '#34d399', UNKNOWN_COLOR = '#38e1ff';
 
+  // ประเภทเหตุ: ใช้ฟิลด์ cat ในฐานข้อมูล (รายงานเก่าที่ไม่มี cat = น้ำขัง)
+  // ttl = เวลาที่ถือว่ายังเป็นข้อมูลปัจจุบัน, group = ใช้กับตัวกรอง
+  const CATS = {
+    flood: { key: 'flood', group: 'flood', label: 'น้ำขัง', icon: 'droplet', color: '#38e1ff', ttl: DAY,
+      levelTitle: 'ระดับน้ำ', clearLabel: 'น้ำลดแล้ว', clearAsk: 'น้ำลดแล้ว?',
+      hint: 'เช่น น้ำขังเต็มทางเดิน รถจักรยานยนต์ผ่านไม่ได้', levels: LEVELS },
+    parking: { key: 'parking', group: 'parking', label: 'ที่จอดรถ', icon: 'parking', color: '#34d399', ttl: 3 * HOUR,
+      levelTitle: 'ที่ว่างตอนนี้', clearLabel: 'ข้อมูลเก่าแล้ว', clearAsk: '',
+      hint: 'เช่น ลานจอดหน้าตึก SC เหลือที่ว่างแถวหลัง', levels: {
+        1: { label: 'ว่างมาก', range: 'มีที่ว่างเยอะ', note: 'จอดได้สบาย', color: '#34d399', radius: 14 },
+        2: { label: 'เหลือน้อย', range: 'เหลือไม่กี่ช่อง', note: 'ควรรีบไป', color: '#facc15', radius: 16 },
+        3: { label: 'เต็ม', range: 'ไม่มีที่ว่าง', note: 'แนะนำไปลานอื่น', color: '#f43f5e', radius: 18 } } },
+    traffic: { key: 'traffic', group: 'traffic', label: 'รถติด', icon: 'car', color: '#fb923c', ttl: 3 * HOUR,
+      levelTitle: 'ความหนาแน่นของรถ', clearLabel: 'รถคล่องแล้ว', clearAsk: 'รถคล่องแล้ว?',
+      hint: 'เช่น รถติดยาวหน้าประตูเชียงราก 1 ช่วงเย็น', levels: {
+        1: { label: 'ชะลอตัว', range: 'รถเคลื่อนช้า', note: 'เผื่อเวลาเพิ่มเล็กน้อย', color: '#facc15', radius: 16 },
+        2: { label: 'ติดขัด', range: 'รอนานกว่า 5 นาที', note: 'ควรเลี่ยงถ้าทำได้', color: '#fb923c', radius: 22 },
+        3: { label: 'ติดหนัก', range: 'แทบไม่ขยับ', note: 'ควรใช้เส้นทางอื่น', color: '#f43f5e', radius: 30 } } },
+    blocking: { key: 'blocking', group: 'traffic', label: 'จอดกีดขวาง', icon: 'ban', color: '#facc15', ttl: 6 * HOUR,
+      levelTitle: 'ผลกระทบ', clearLabel: 'ย้ายรถแล้ว', clearAsk: 'ย้ายรถแล้ว?',
+      hint: 'เช่น รถจอดขวางทางลาดหน้าตึก (หลีกเลี่ยงการถ่ายติดป้ายทะเบียน)', levels: {
+        1: { label: 'กีดขวางบางส่วน', range: 'ยังพอผ่านได้', note: 'ผ่านได้ช้า ๆ', color: '#facc15', radius: 12 },
+        2: { label: 'ขวางทั้งช่องทาง', range: 'ผ่านไม่ได้', note: 'ต้องอ้อม', color: '#fb923c', radius: 16 } } },
+    accident: { key: 'accident', group: 'traffic', label: 'อุบัติเหตุ/ถนนปิด', icon: 'cone', color: '#f43f5e', ttl: 12 * HOUR,
+      levelTitle: 'ลักษณะเหตุ', clearLabel: 'เปิดใช้ได้แล้ว', clearAsk: 'เคลียร์แล้ว?',
+      hint: 'เช่น รถชนกันเล็กน้อยหน้าโรงอาหาร มีเจ้าหน้าที่อยู่แล้ว', levels: {
+        1: { label: 'อุบัติเหตุเล็กน้อย', range: 'รถชะลอ', note: 'ขับผ่านด้วยความระวัง', color: '#fb923c', radius: 16 },
+        2: { label: 'อุบัติเหตุรุนแรง', range: 'มีผู้บาดเจ็บ/รอเจ้าหน้าที่', note: 'ควรเลี่ยงเส้นทาง', color: '#f43f5e', radius: 24 },
+        3: { label: 'ถนนปิด/ก่อสร้าง', range: 'ปิดเส้นทาง', note: 'ต้องใช้ทางอื่น', color: '#a78bfa', radius: 24 } } }
+  };
+  const CAT_ORDER = ['flood', 'parking', 'traffic', 'blocking', 'accident'];
+  // ความรุนแรง 0–3 ใช้จัดลำดับในแบนเนอร์ (ลานจอดที่ยังว่าง = ไม่ใช่ปัญหา)
+  function severity(r) {
+    const c = r.cat || 'flood', l = r.level || 0;
+    if (c === 'flood') return l >= 3 ? 3 : 2;
+    if (c === 'parking') return l === 3 ? 1 : 0;
+    if (c === 'accident') return l === 2 ? 3 : 2;
+    return Math.max(1, l);
+  }
+
   /* ---------- ไอคอน (เส้นแบบ Lucide) ---------- */
   const PATHS = {
     droplet: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
@@ -622,7 +699,12 @@
     cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/>',
     cloudSun: '<path d="M12 2v2M4.9 4.9l1.4 1.4M20 12h2M19.1 4.9l-1.4 1.4M15.9 13A4 4 0 0 0 8.1 11"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6z"/>',
     rain: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6M8 14v6M12 16v6"/>',
-    storm: '<path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 9"/><path d="m13 12-3 5h4l-3 5"/>'
+    storm: '<path d="M6 16.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 9"/><path d="m13 12-3 5h4l-3 5"/>',
+    parking: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>',
+    car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+    ban: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+    cone: '<path d="M9.3 6.2a4.55 2 0 0 0 5.4 0"/><path d="M7.9 10.7a8 3 0 0 0 8.2 0"/><path d="m13.8 3.1 2.9 9.4"/><path d="M10.2 3.1 7.3 12.5"/><path d="M7.4 14.5c-1.6.4-3 1-3 1.5 0 1.1 3.6 2 8 2s8-.9 8-2c0-.5-1.4-1.1-3-1.5"/><path d="M10.2 3.1a2 2 0 0 1 3.6 0"/>',
+    share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>'
   };
   const icon = (name, size) => {
     const s = size || 18;
@@ -643,7 +725,7 @@
   let liveReports = [];
   let demoReports = null;        // มีค่าเมื่อเปิดโหมดตัวอย่าง
   let byId = new Map();
-  let statusFilter = 'all', rangeFilter = '7d';
+  let statusFilter = 'all', rangeFilter = '7d', catFilter = 'all';
   let feedShown = FEED_PAGE;
   let feedNotice = 'กำลังโหลดรายงาน…';
   let firstSnapshot = true;
@@ -657,7 +739,7 @@
   const connectStart = Date.now();
   let weather = null;
   let is3D = true;
-  let pending = { lngLat: null, level: 0, image: '', imageTask: null };
+  let pending = { lngLat: null, cat: 'flood', level: 0, image: '', imageTask: null };
   let sending = false;
 
   /* ---------- ตัวช่วย ---------- */
@@ -745,12 +827,15 @@
 
   /* ---------- ตรรกะรายงาน ---------- */
   const reports = () => demoReports || liveReports;
-  const levelOf = (r) => LEVELS[r.level] || null;
+  const catOf = (r) => CATS[r.cat] || CATS.flood;
+  const levelOf = (r) => catOf(r).levels[r.level] || null;
+  const isFlood = (r) => catOf(r).key === 'flood';
   const isCleared = (r) => r.status === 'cleared';
-  const isActive = (r) => !isCleared(r) && Date.now() - r.time <= DAY;
-  const isStale = (r) => !isCleared(r) && Date.now() - r.time > DAY;
+  const isActive = (r) => !isCleared(r) && Date.now() - r.time <= catOf(r).ttl;
+  const isStale = (r) => !isCleared(r) && Date.now() - r.time > catOf(r).ttl;
   const colorOf = (r) => isCleared(r) ? CLEARED_COLOR : (levelOf(r) ? levelOf(r).color : UNKNOWN_COLOR);
   function isVisible(r) {
+    if (catFilter !== 'all' && catOf(r).group !== catFilter) return false;
     if (statusFilter === 'active' && isCleared(r)) return false;
     if (statusFilter === 'cleared' && !isCleared(r)) return false;
     return Date.now() - r.time <= RANGES[rangeFilter];
@@ -900,7 +985,7 @@
     const before = overlayBeforeId();
     map.addLayer({
       id: 'flood-heat', type: 'heatmap', source: 'reports', maxzoom: 16,
-      filter: ['==', ['get', 'active'], true],
+      filter: ['all', ['==', ['get', 'active'], true], ['==', ['get', 'flood'], true]],
       paint: {
         'heatmap-weight': ['/', ['get', 'level'], 4],
         'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 1, 15, 2.2],
@@ -964,6 +1049,7 @@
         properties: {
           id: r.id,
           level: r.level || 2,
+          flood: isFlood(r),
           r: levelOf(r) ? levelOf(r).radius : 18,
           color: colorOf(r),
           active: !isCleared(r),
@@ -978,13 +1064,13 @@
   const markers = new Map();   // id -> { marker, el, key }
 
   function pinHtml(r) {
-    return `<div class="pin-body">${icon(isCleared(r) ? 'check' : 'droplet', 15)}</div>` +
+    return `<div class="pin-body">${icon(isCleared(r) ? 'check' : catOf(r).icon, 15)}</div>` +
       (r.confirms > 0 ? `<span class="pin-badge">${r.confirms}</span>` : '');
   }
   function stylePin(el, r) {
     el.className = 'pin' + (isActive(r) ? ' live' : '') + (isStale(r) ? ' stale' : '');
     el.style.setProperty('--c', colorOf(r));
-    el.setAttribute('aria-label', r.place + ' — ' + (isCleared(r) ? 'น้ำลดแล้ว' : (levelOf(r) ? levelOf(r).label : 'มีน้ำขัง')));
+    el.setAttribute('aria-label', r.place + ' — ' + catOf(r).label + ' ' + (isCleared(r) ? catOf(r).clearLabel : (levelOf(r) ? levelOf(r).label : '')));
     el.innerHTML = pinHtml(r);
   }
 
@@ -993,7 +1079,7 @@
     reports().forEach((r) => {
       if (!isVisible(r)) return;
       seen.add(r.id);
-      const key = [r.status, r.level, r.confirms, isStale(r), isActive(r)].join('|');
+      const key = [r.cat, r.status, r.level, r.confirms, isStale(r), isActive(r)].join('|');
       let m = markers.get(r.id);
       if (!m) {
         // el ด้านนอกเป็นของ MapLibre (มีคลาสจัดตำแหน่ง) ห้ามเขียนทับ className — ตกแต่งที่ div ด้านในแทน
@@ -1019,7 +1105,7 @@
   function popupHtml(r) {
     if (!r) return '';
     return `<div class="pop">
-      ${r.image ? `<button type="button" class="pop-img" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="ภาพจุดน้ำขัง"></button>` : ''}
+      ${r.image ? `<button type="button" class="pop-img" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="ภาพจุดเกิดเหตุ"></button>` : ''}
       <div class="pop-body" style="--c:${colorOf(r)}">
         <div class="tags">${tagsHtml(r)}</div>
         <h3>${esc(r.place)}</h3>
@@ -1032,17 +1118,18 @@
 
   function tagsHtml(r) {
     const L = levelOf(r);
-    let h = isCleared(r)
-      ? `<span class="tag" style="--c:${CLEARED_COLOR}">${icon('check', 11)}น้ำลดแล้ว</span>`
-      : `<span class="tag" style="--c:#ff5a6e">● ยังมีน้ำขัง</span>`;
-    if (L) h += `<span class="tag" style="--c:${L.color}">${L.label} · ${L.range}</span>`;
+    const C = catOf(r);
+    let h = `<span class="tag" style="--c:${C.color}">${icon(C.icon, 11)}${C.label}</span>`;
+    if (isCleared(r)) h += `<span class="tag" style="--c:${CLEARED_COLOR}">${icon('check', 11)}${C.clearLabel}</span>`;
+    else if (isStale(r)) h += `<span class="tag plain">อาจไม่เป็นปัจจุบัน</span>`;
+    if (L && !isCleared(r)) h += `<span class="tag" style="--c:${L.color}">${L.label} · ${L.range}</span>`;
     if (r.demo) h += '<span class="tag plain">ตัวอย่าง</span>';
     return h;
   }
   function actsHtml(r) {
     const on = confirmedSet.has(r.id);
-    return `<button type="button" class="act${on ? ' on' : ''}" data-confirm="${esc(r.id)}" aria-pressed="${on}" title="ยืนยันว่าจุดนี้มีน้ำขังจริง">${icon('thumb', 13)}ยืนยัน ${r.confirms}</button>` +
-      (isCleared(r) ? '' : `<button type="button" class="act" data-clear="${esc(r.id)}">${icon('check', 13)}น้ำลดแล้ว?</button>`);
+    return `<button type="button" class="act${on ? ' on' : ''}" data-confirm="${esc(r.id)}" aria-pressed="${on}" title="ยืนยันว่าข้อมูลนี้ตรงกับที่เห็นจริง">${icon('thumb', 13)}ยืนยัน ${r.confirms}</button>` +
+      (isCleared(r) || !catOf(r).clearAsk ? '' : `<button type="button" class="act" data-clear="${esc(r.id)}" data-label="${esc(catOf(r).clearAsk)}">${icon('check', 13)}${esc(catOf(r).clearAsk)}</button>`);
   }
 
   function focusReport(id) {
@@ -1281,15 +1368,16 @@
       renderAll();
     });
   }
+  wireSeg('catSeg', (v) => { catFilter = v; });
   wireSeg('statusSeg', (v) => { statusFilter = v; });
   wireSeg('rangeSeg', (v) => { rangeFilter = v; });
 
   /* ---------- การแสดงผล ---------- */
   function renderAlert() {
     const el = $('alertCard');
-    const active = reports().filter(isActive).sort((a, b) => (b.level || 0) - (a.level || 0) || b.time - a.time);
+    const active = reports().filter((r) => isActive(r) && severity(r) > 0).sort((a, b) => severity(b) - severity(a) || b.time - a.time);
     if (!active.length && listenError && !demoReports && !liveReports.length) {
-      // ห้ามบอกว่า "ไม่มีน้ำขัง" ในขณะที่ยังอ่านข้อมูลไม่ได้
+      // ห้ามบอกว่า "ไม่มีเหตุ" ในขณะที่ยังอ่านข้อมูลไม่ได้
       el.className = 'alert';
       el.style.setProperty('--alert-c', '#a9b6ca');
       el.style.setProperty('--alert-bg', 'none');
@@ -1302,12 +1390,14 @@
       el.style.setProperty('--alert-c', 'var(--ok)');
       el.style.setProperty('--alert-bg', 'linear-gradient(110deg, rgba(52,211,153,0.10), transparent 70%)');
       el.innerHTML = `<div class="alert-ic">${icon(firstSnapshot && !demoReports ? 'radar' : 'shield', 20)}</div><div class="alert-body">
-        <b>${firstSnapshot && !demoReports ? 'กำลังตรวจสอบสถานการณ์…' : 'ไม่มีรายงานน้ำขังใน 24 ชั่วโมง'}</b>
-        <span>พบจุดน้ำขัง? กด "แจ้งน้ำขัง" เพื่อเตือนเพื่อน ๆ ได้ทันที</span></div>`;
+        <b>${firstSnapshot && !demoReports ? 'กำลังตรวจสอบสถานการณ์…' : 'ตอนนี้ไม่มีรายงานน้ำขังหรือปัญหาจราจร'}</b>
+        <span>เจอน้ำขัง รถติด หรืออยากบอกว่าลานจอดว่าง? กด "แจ้งเหตุ" ได้เลย</span></div>`;
       return;
     }
-    const worst = Math.max(...active.map((r) => r.level || 0));
+    const worst = Math.max(...active.map(severity));
     const c = worst >= 3 ? '#f43f5e' : '#facc15';
+    const nFlood = active.filter(isFlood).length, nOther = active.length - nFlood;
+    const headline = [nFlood ? `น้ำขัง ${nFlood} จุด` : '', nOther ? `ปัญหาจราจร/ที่จอด ${nOther} จุด` : ''].filter(Boolean).join(' · ');
     const picks = [], seen = new Set();
     for (const r of active) {
       if (seen.has(r.place)) continue;
@@ -1319,7 +1409,7 @@
     el.style.setProperty('--alert-c', c);
     el.style.setProperty('--alert-bg', `linear-gradient(110deg, ${c}26, transparent 75%)`);
     el.innerHTML = `<div class="alert-ic">${icon('alert', 20)}</div><div class="alert-body">
-      <b>ขณะนี้มีน้ำขัง ${active.length} จุด${worst >= 3 ? ' · บางจุดสูงถึงเข่า' : ''}</b>
+      <b>ขณะนี้มี${headline}</b>
       <span>${worst >= 3 ? 'ควรหลีกเลี่ยงเส้นทางต่อไปนี้' : 'เดินทางด้วยความระมัดระวัง'}</span>
       <div class="chips">${picks.map((r) => `<button type="button" class="chip" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}"><span>${esc(r.place)}</span></button>`).join('')}</div>
     </div>`;
@@ -1329,7 +1419,7 @@
     return `<article class="fcard${isStale(r) ? ' stale' : ''}${isNew ? ' enter' : ''}" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}" tabindex="0" aria-label="ดู ${esc(r.place)} บนแผนที่">
       ${r.image
         ? `<button type="button" class="thumb" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="" loading="lazy"></button>`
-        : `<div class="thumb empty">${icon(isCleared(r) ? 'check' : 'droplet', 24)}</div>`}
+        : `<div class="thumb empty">${icon(isCleared(r) ? 'check' : catOf(r).icon, 24)}</div>`}
       <div class="fbody">
         <div class="ftop"><h3>${esc(r.place)}</h3>${r.pending ? '<span class="ftime">กำลังส่ง…</span>' : `<span class="ftime" data-ts="${r.time}">${timeAgo(r.time)}</span>`}</div>
         <div class="tags">${tagsHtml(r)}</div>
@@ -1363,9 +1453,9 @@
   function renderKPI() {
     const all = reports();
     const active = all.filter(isActive);
-    countTo($('kpiActive'), active.length);
-    countTo($('kpiSevere'), active.filter((r) => r.level >= 3).length);
-    countTo($('kpiCleared'), all.filter((r) => isCleared(r) && Date.now() - r.time <= RANGES[rangeFilter]).length);
+    countTo($('kpiActive'), active.filter(isFlood).length);
+    countTo($('kpiSevere'), active.filter((r) => !isFlood(r) && severity(r) > 0).length);
+    countTo($('kpiCleared'), all.length);
   }
 
   function renderStats() {
@@ -1388,7 +1478,27 @@
         `<text x="${i === 4 ? 358 : i * 90 + 2}" y="107" font-size="9" fill="#6c7a92" text-anchor="${i === 4 ? 'end' : 'start'}">${t}</text>`).join('');
 
     // สัดส่วนระดับน้ำ
-    const active = all.filter((r) => !isCleared(r) && now - r.time <= RANGES[rangeFilter]);
+    // สัดส่วนประเภทรายงาน
+    const inRange = all.filter((r) => now - r.time <= RANGES[rangeFilter]);
+    const cc = CAT_ORDER.map((k) => inRange.filter((r) => catOf(r).key === k).length);
+    const ctot = cc.reduce((a, b) => a + b, 0) || 1;
+    $('catStack').innerHTML = cc.map((c, i) => `<i style="width:${(c / ctot) * 100}%; background:${CATS[CAT_ORDER[i]].color}"></i>`).join('');
+    $('catLegend').innerHTML = cc.map((c, i) => `<span><i style="--c:${CATS[CAT_ORDER[i]].color}"></i>${CATS[CAT_ORDER[i]].label} ${c}</span>`).join('');
+
+    // ลานจอดรถ: สถานะล่าสุดของแต่ละที่
+    const park = new Map();
+    all.filter((r) => catOf(r).key === 'parking' && now - r.time <= 3 * HOUR)
+      .sort((a, b) => b.time - a.time)
+      .forEach((r) => { if (!park.has(r.place)) park.set(r.place, r); });
+    $('parkList').innerHTML = park.size
+      ? [...park.values()].map((r) => {
+          const L = levelOf(r) || { label: '—', color: '#a9b6ca' };
+          return `<div class="park-row" style="--c:${L.color}" data-focus="${esc(r.id)}"><div class="pdot">${icon('parking', 15)}</div>
+            <span>${esc(r.place)}</span><b>${L.label}</b><small>${timeAgo(r.time)}</small></div>`;
+        }).join('')
+      : '<div class="muted">ยังไม่มีใครรายงานลานจอดใน 3 ชม. ที่ผ่านมา — ถ่ายรูปลานจอดแล้วกด "แจ้งเหตุ" ได้เลย</div>';
+
+    const active = all.filter((r) => isFlood(r) && !isCleared(r) && now - r.time <= RANGES[rangeFilter]);
     const counts = [1, 2, 3, 4].map((n) => active.filter((r) => r.level === n).length);
     const tot = counts.reduce((a, b) => a + b, 0) || 1;
     $('lvlStack').innerHTML = counts.map((c, i) => `<i style="width:${(c / tot) * 100}%; background:${LEVELS[i + 1].color}"></i>`).join('');
@@ -1539,6 +1649,20 @@
   map.on('moveend', () => { body.classList.remove('moving'); updatePickPlace(); });
 
   $('fab').addEventListener('click', enterPick);
+
+  // ชวนเพื่อน: ยิ่งคนรายงานมาก ข้อมูลยิ่งแม่น
+  $('btnShare').addEventListener('click', async () => {
+    const url = location.origin + location.pathname;
+    const text = 'TU Flood Watch — ช่วยกันแจ้งน้ำขัง รถติด และที่จอดรถว่างใน มธ. รังสิต';
+    try {
+      if (navigator.share) { await navigator.share({ title: 'TU Flood Watch', text, url }); return; }
+      await navigator.clipboard.writeText(url);
+      toast('คัดลอกลิงก์แล้ว ส่งต่อให้เพื่อนได้เลย');
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast('ลิงก์เว็บ: ' + url, 6000);
+    }
+  });
   $('pickCancel').addEventListener('click', exitPick);
   $('pickGps').addEventListener('click', () => locate(() => map.once('idle', updatePickPlace)));
   $('pickOk').addEventListener('click', () => {
@@ -1560,12 +1684,34 @@
   $('dialog').addEventListener('click', (e) => { if (e.target === $('dialog')) closeDialog(); });
   $('changeLoc').addEventListener('click', () => { closeDialog(); enterPick(); });
 
-  // ตัวเลือกระดับน้ำ + ภาพคนยืนในน้ำ
-  $('levelList').innerHTML = [1, 2, 3, 4].map((n) => {
-    const L = LEVELS[n];
-    return `<button type="button" class="lvl" role="radio" aria-checked="false" data-level="${n}" style="--c:${L.color}">
-      <span class="lvl-dot">${n}</span><span><b>${L.label}</b><small>${L.range} · ${L.note}</small></span></button>`;
+  // ตัวเลือกประเภทเหตุ
+  $('catList').innerHTML = CAT_ORDER.map((k) => {
+    const C = CATS[k];
+    return `<button type="button" class="cat" role="radio" aria-checked="false" data-cat="${k}" style="--c:${C.color}">${icon(C.icon, 22)}<span>${C.label}</span></button>`;
   }).join('');
+  $('catList').addEventListener('click', (e) => {
+    const b = e.target.closest('.cat');
+    if (!b || b.dataset.cat === pending.cat) return;
+    pending.cat = b.dataset.cat;
+    pending.level = 0;
+    $('formError').hidden = true;
+    renderCatUI();
+  });
+  function renderCatUI() {
+    const C = CATS[pending.cat];
+    $('catList').querySelectorAll('.cat').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.cat === pending.cat)));
+    $('dlgTitle').textContent = 'แจ้งเหตุ: ' + C.label;
+    $('levelLbl').textContent = C.levelTitle;
+    $('levelWrap').classList.toggle('no-fig', C.key !== 'flood');
+    $('descInput').placeholder = C.hint;
+    // ตัวเลือกระดับ (ภาพคนยืนในน้ำแสดงเฉพาะน้ำขัง)
+    $('levelList').innerHTML = Object.keys(C.levels).map((n) => {
+      const L = C.levels[n];
+      return `<button type="button" class="lvl" role="radio" aria-checked="false" data-level="${n}" style="--c:${L.color}">
+        <span class="lvl-dot">${n}</span><span><b>${L.label}</b><small>${L.range} · ${L.note}</small></span></button>`;
+    }).join('');
+    updateLevelUI();
+  }
   $('levelList').addEventListener('click', (e) => {
     const b = e.target.closest('.lvl');
     if (!b) return;
@@ -1574,13 +1720,14 @@
     updateLevelUI();
   });
   function updateLevelUI() {
-    const L = LEVELS[pending.level];
+    const L = pending.cat === 'flood' ? LEVELS[pending.level] : null;
     const water = $('water');
     water.style.transform = 'translateY(' + (L ? L.wy : 215) + 'px)';
     water.style.setProperty('--wc', L ? L.color : 'var(--aqua)');
     $('levelList').querySelectorAll('.lvl').forEach((b) =>
       b.setAttribute('aria-checked', String(Number(b.dataset.level) === pending.level)));
   }
+  renderCatUI();
 
   $('descInput').maxLength = MAX_DESC;
   $('placeInput').maxLength = MAX_PLACE;
@@ -1659,7 +1806,7 @@
     if (sending) return;
     if (!pending.lngLat) { closeDialog(); enterPick(); return; }
     if (!pending.level) {
-      $('formError').textContent = 'กรุณาเลือกระดับน้ำก่อนส่งรายงาน';
+      $('formError').textContent = 'กรุณาเลือก' + CATS[pending.cat].levelTitle + 'ก่อนส่งรายงาน';
       $('formError').hidden = false;
       return;
     }
@@ -1676,6 +1823,7 @@
       const doc = {
         lat: Math.round(ll.lat * 1e6) / 1e6,
         lng: Math.round(ll.lng * 1e6) / 1e6,
+        cat: pending.cat,
         level: pending.level,
         place: ($('placeInput').value.trim() || 'มธ. ศูนย์รังสิต').slice(0, MAX_PLACE),
         detail: $('descInput').value.trim().slice(0, MAX_DESC),
@@ -1688,7 +1836,7 @@
       if (res !== TIMEOUT && writeError) { writeError = ''; updateSync(); }
       toast(res === TIMEOUT
         ? 'เครือข่ายช้า ระบบจะส่งรายงานให้เมื่อเชื่อมต่อได้'
-        : 'ส่งรายงานสำเร็จ ขอบคุณที่ช่วยแจ้งเตือน 💧', res === TIMEOUT ? 6000 : 3500);
+        : 'ส่งรายงานสำเร็จ ขอบคุณที่ช่วยกันแจ้งข้อมูล', res === TIMEOUT ? 6000 : 3500);
       closeDialog();
       map.flyTo({ center: [doc.lng, doc.lat], zoom: 17.5, pitch: is3D ? 55 : 0, duration: 1400 });
       resetForm();
@@ -1735,11 +1883,12 @@
   async function markCleared(id) {
     const r = byId.get(id);
     if (!r || isCleared(r)) return;
-    if (r.demo) { r.status = 'cleared'; renderAll(); toast('อัปเดตเป็น "น้ำลดแล้ว" (ตัวอย่าง)'); return; }
+    const lab = catOf(r).clearLabel;
+    if (r.demo) { r.status = 'cleared'; renderAll(); toast('อัปเดตเป็น "' + lab + '" (ตัวอย่าง)'); return; }
     if (!fs) { toast('ยังเชื่อมต่อฐานข้อมูลไม่สำเร็จ'); return; }
     try {
       const res = await withTimeout(fs.updateDoc(fs.doc(db, COLLECTION, id), { status: 'cleared' }), 8000);
-      toast(res === TIMEOUT ? 'เครือข่ายช้า ระบบจะอัปเดตให้เมื่อเชื่อมต่อได้' : 'อัปเดตเป็น "น้ำลดแล้ว" ขอบคุณครับ');
+      toast(res === TIMEOUT ? 'เครือข่ายช้า ระบบจะอัปเดตให้เมื่อเชื่อมต่อได้' : 'อัปเดตเป็น "' + lab + '" ขอบคุณครับ');
     } catch (err) {
       console.error(err);
       noteWriteError(err);
@@ -1757,7 +1906,7 @@
       if (!btn.isConnected) return;
       delete btn.dataset.armed;
       btn.classList.remove('armed');
-      btn.innerHTML = icon('check', 13) + 'น้ำลดแล้ว?';
+      btn.innerHTML = icon('check', 13) + esc(btn.dataset.label || 'คลี่คลายแล้ว?');
     }, 3000);
   }
 
@@ -1803,14 +1952,19 @@
       [0.0031, 0.0026, 2, 'ถนนภายในหน้าหอพัก (ตัวอย่าง)', 'น้ำขังครึ่งแข้ง มอเตอร์ไซค์ควรเลี่ยง', 5],
       [-0.0028, -0.0034, 1, 'ทางเท้าหน้าโรงอาหาร (ตัวอย่าง)', 'น้ำขังเล็กน้อย เดินผ่านได้แต่ลื่น', 3],
       [0.0004, 0.0042, 3, 'อุโมงค์ทางลอด (ตัวอย่าง)', 'น้ำระบายไม่ทัน สูงประมาณ 40 ซม.', 11],
+      [0.0022, -0.0046, 3, 'ลานจอดรถหน้าอาคารเรียนรวม (ตัวอย่าง)', 'เต็มทุกช่อง วนหาอยู่ 10 นาที', 6, 'parking'],
+      [-0.0019, 0.0035, 1, 'ลานจอดรถข้างยิม (ตัวอย่าง)', 'ว่างเยอะ แถวหลังมีที่เพียบ', 2, 'parking'],
+      [-0.0052, -0.0012, 3, 'หน้าประตูเชียงราก 1 (ตัวอย่าง)', 'รถติดยาวออกไปถึงถนนใหญ่ ช่วงเลิกเรียน', 8, 'traffic'],
+      [0.0038, -0.0008, 2, 'ทางเข้าหอพัก (ตัวอย่าง)', 'มีรถจอดซ้อนคันขวางทางเข้า', 3, 'blocking'],
+      [0.0009, -0.0031, 3, 'ถนนหลังหอสมุด (ตัวอย่าง)', 'ปิดซ่อมท่อ ใช้ทางเลี่ยงด้านข้าง', 4, 'accident'],
       [-0.0041, 0.0008, 2, 'ป้ายรถตู้ฝั่งประตู (ตัวอย่าง)', 'เมื่อเช้าน้ำขัง ตอนนี้ลดแล้ว', 4]
     ];
     demoReports = spots.map((s, i) => ({
       id: 'demo-' + i, demo: true,
       lat: TU_CENTER[1] + s[0], lng: TU_CENTER[0] + s[1],
-      level: s[2], place: s[3], desc: s[4], confirms: s[5], image: '',
-      status: i === 5 ? 'cleared' : 'active',
-      time: now - (i * 2.4 + 0.4) * HOUR, pending: false
+      cat: s[6] || 'flood', level: s[2], place: s[3], desc: s[4], confirms: s[5], image: '',
+      status: i === spots.length - 1 ? 'cleared' : 'active',
+      time: now - (s[6] ? 0.3 + i * 0.15 : i * 2.4 + 0.4) * HOUR, pending: false
     }));
     byId = new Map(demoReports.map((r) => [r.id, r]));
     renderAll(new Set(demoReports.map((r) => r.id)));
@@ -1837,7 +1991,7 @@
       }
       notifyOn = true;
       toast(perm === 'granted'
-        ? 'เปิดแจ้งเตือนแล้ว จะเด้งเตือนเมื่อมีน้ำขังจุดใหม่ (เปิดหน้านี้ทิ้งไว้)'
+        ? 'เปิดแจ้งเตือนแล้ว จะเด้งเตือนเมื่อมีรายงานใหม่ (เปิดหน้านี้ทิ้งไว้)'
         : 'จะแจ้งเตือนในหน้าเว็บ (เบราว์เซอร์ไม่อนุญาตการแจ้งเตือนระบบ)', 5000);
     }
     saveFlag(NOTIFY_KEY, notifyOn);
@@ -1848,7 +2002,7 @@
     if (!list.length) return;
     const r = list[0];
     const L = levelOf(r);
-    const msg = 'น้ำขังใหม่: ' + r.place + (L ? ' · ' + L.label : '') + (list.length > 1 ? ' และอีก ' + (list.length - 1) + ' จุด' : '');
+    const msg = catOf(r).label + 'ใหม่: ' + r.place + (L ? ' · ' + L.label : '') + (list.length > 1 ? ' และอีก ' + (list.length - 1) + ' จุด' : '');
     toast(msg, 5000);
     if (document.hidden) {
       unseen += list.length;
@@ -1876,9 +2030,10 @@
       if (!isFinite(lat) || !isFinite(lng)) return;
       const ts = x.timestamp && typeof x.timestamp.toMillis === 'function' ? x.timestamp.toMillis() : Date.now();
       const lv = Number(x.level);
+      const cat = CATS[x.cat] ? x.cat : 'flood';
       next.push({
-        id: d.id, lat, lng,
-        level: LEVELS[lv] ? lv : 0,
+        id: d.id, lat, lng, cat,
+        level: CATS[cat].levels[lv] ? lv : 0,
         place: String(x.place || 'มธ. ศูนย์รังสิต'),
         desc: String(x.detail || ''),
         image: safeImg(x.imageUrl),
