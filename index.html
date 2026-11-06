@@ -439,6 +439,46 @@
     animation:spark 1s cubic-bezier(.2,.8,.3,1) forwards;}
   @keyframes spark{ from{transform:translate(0,0) scale(1); opacity:1;} to{transform:translate(var(--dx), var(--dy)) scale(.3); opacity:0;} }
   @media (prefers-reduced-motion: reduce){ .spark, .cel-ring::before, .cel-ring::after{display:none;} }
+
+  /* ---------- บรรยากาศตามสภาพอากาศจริง ---------- */
+  .sky{position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; opacity:0; transition:opacity 2.5s ease;}
+  .sky.on{opacity:1;}
+  .sky::before{content:""; position:absolute; inset:0; opacity:0; transition:opacity 2.5s;
+    background:linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.15) 45%, transparent 75%);}
+  .sky.rain::before, .sky.storm::before{opacity:1;}
+  .sky.soon::before{opacity:.5;}
+  .sky .cloud{position:absolute; width:80vmax; height:42vmax; border-radius:50%; opacity:0; transition:opacity 3s;
+    background:radial-gradient(closest-side, rgba(var(--cc), var(--ca)), transparent); animation:drift var(--d) ease-in-out infinite alternate;}
+  .sky .c1{top:-18vmax; left:-25vmax; --d:70s;}
+  .sky .c2{top:-10vmax; right:-30vmax; --d:95s; animation-direction:alternate-reverse;}
+  .sky .c3{top:22vh; left:10vw; width:60vmax; height:30vmax; --d:120s;}
+  .sky .c4{bottom:-20vmax; right:-10vmax; --d:85s; animation-direction:alternate-reverse;}
+  @keyframes drift{ from{transform:translateX(-12vw);} to{transform:translateX(12vw);} }
+  .sky.cloudy .cloud{opacity:1; --cc:148,163,184; --ca:.10;}
+  .sky.cloudy .c3, .sky.cloudy .c4{opacity:0;}
+  .sky.soon .cloud{opacity:1; --cc:100,116,139; --ca:.17;}
+  .sky.soon .c4{opacity:0;}
+  .sky.rain .cloud{opacity:1; --cc:71,85,105; --ca:.26;}
+  .sky.storm .cloud{opacity:1; --cc:51,65,85; --ca:.34;}
+  .sky .sun{position:absolute; top:-22vmax; right:-18vmax; width:60vmax; height:60vmax; border-radius:50%; opacity:0; transition:opacity 3s;
+    background:radial-gradient(closest-side, rgba(253,224,71,0.13), rgba(251,146,60,0.05) 55%, transparent); animation:sunPulse 9s ease-in-out infinite;}
+  .sky.day.clear .sun{opacity:1;}
+  .sky.day.cloudy .sun{opacity:.45;}
+  @keyframes sunPulse{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.06);} }
+  .sky .stars{position:absolute; inset:0 0 40% 0; opacity:0; transition:opacity 3s;
+    background-image:radial-gradient(1.2px 1.2px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 28% 8%, #fff, transparent),
+      radial-gradient(1.4px 1.4px at 46% 22%, #dbeafe, transparent), radial-gradient(1px 1px at 63% 12%, #fff, transparent),
+      radial-gradient(1.2px 1.2px at 78% 28%, #fff, transparent), radial-gradient(1px 1px at 88% 6%, #e0f2fe, transparent),
+      radial-gradient(1px 1px at 37% 34%, #fff, transparent), radial-gradient(1.3px 1.3px at 6% 40%, #fff, transparent),
+      radial-gradient(1px 1px at 55% 4%, #fff, transparent), radial-gradient(1.2px 1.2px at 94% 36%, #fff, transparent);
+    animation:twinkle 4s ease-in-out infinite alternate;}
+  .sky.night.clear .stars{opacity:.7;}
+  @keyframes twinkle{ from{filter:brightness(.6);} to{filter:brightness(1.3);} }
+  .sky canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .sky .flash{position:absolute; inset:0; background:rgba(219,234,254,0.55); opacity:0;}
+  .sky .flash.go{animation:flash .9s ease-out;}
+  @keyframes flash{ 0%{opacity:0;} 8%{opacity:.9;} 16%{opacity:.1;} 26%{opacity:.6;} 100%{opacity:0;} }
+  @media (prefers-reduced-motion: reduce){ .sky .cloud, .sky .sun, .sky .stars{animation:none;} .sky .flash{display:none;} }
 </style>
 </head>
 <body data-sheet="peek">
@@ -454,6 +494,11 @@
 
 <div id="map" aria-label="แผนที่ 3 มิติ มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต"></div>
 <div class="vignette"></div>
+<div class="sky" id="sky" aria-hidden="true">
+  <div class="sun"></div><div class="stars"></div>
+  <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div>
+  <canvas id="rainFx"></canvas><div class="flash"></div>
+</div>
 
 <aside class="sheet glass" id="sheet">
   <div class="sheet-grab" id="sheetGrab">
@@ -1041,6 +1086,7 @@
     $('btnRadar').setAttribute('aria-pressed', 'false');
     map.addSource('reports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     const before = overlayBeforeId();
+    addCampusLayers(before);
     map.addLayer({
       id: 'flood-heat', type: 'heatmap', source: 'reports', maxzoom: 16,
       filter: ['all', ['==', ['get', 'active'], true], ['==', ['get', 'flood'], true]],
@@ -1116,7 +1162,159 @@
         }
       }))
     });
+    refreshCampus();
   }
+
+  /* =====================================================================
+     ชั้นข้อมูลวิทยาเขต: ถนนเรืองแสง · ลานจอดรถตามสถานะ · ถนนรถติด · จุดเคยเกิดเหตุ
+     ข้อมูลถนน/ลานจอดอ่านจาก OpenStreetMap ที่แผนที่โหลดอยู่แล้ว (ไม่ต้องใช้ API เพิ่ม)
+     ===================================================================== */
+  const VSRC = 'openmaptiles';
+  const CAMPUS = { type: 'Polygon', coordinates: [[[100.5925, 14.0575], [100.6195, 14.0575], [100.6195, 14.0835], [100.5925, 14.0835], [100.5925, 14.0575]]] };
+  const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+  const NO_DATA = '#64748b';
+  const TRAFFIC_CATS = ['traffic', 'blocking', 'accident'];
+  const zoomLin = (a, b, c, d) => ['interpolate', ['exponential', 1.6], ['zoom'], a, b, c, d];
+
+  function addCampusLayers(before) {
+    if (!map.getSource(VSRC) || map.getSource('lots')) return;   // แผนที่ภาพสำรองไม่มีข้อมูลถนน
+    ['history', 'lots', 'jams'].forEach((id) => map.addSource(id, { type: 'geojson', data: EMPTY_FC }));
+    const roads = ['all', ['in', ['get', 'class'], ['literal', ['minor', 'tertiary', 'secondary', 'primary']]], ['within', CAMPUS]];
+    const add = (l) => { try { map.addLayer(l, before); } catch (e) { console.warn('layer', l.id, e); } };
+    add({ id: 'campus-road-glow', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 13.5, filter: roads,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#38e1ff', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.2],
+        'line-width': zoomLin(14, 5, 18, 30), 'line-blur': zoomLin(14, 3, 18, 16) } });
+    add({ id: 'campus-road-core', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 13.5, filter: roads,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#7dd3fc', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 13.5, 0, 15, 0.5],
+        'line-width': zoomLin(14, 0.8, 18, 2.4), 'line-dasharray': [2, 2] } });
+    add({ id: 'lot-aisles', type: 'line', source: VSRC, 'source-layer': 'transportation', minzoom: 15,
+      filter: ['all', ['==', ['get', 'service'], 'parking_aisle'], ['within', CAMPUS]],
+      paint: { 'line-color': '#94a3b8', 'line-opacity': 0.3, 'line-width': zoomLin(15, 1, 18, 5) } });
+    add({ id: 'history-glow', type: 'circle', source: 'history', minzoom: 13,
+      paint: { 'circle-radius': radiusExpr(1), 'circle-color': ['get', 'color'], 'circle-opacity': 0.13, 'circle-blur': 0.85,
+        'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
+    add({ id: 'lot-pad', type: 'circle', source: 'lots', minzoom: 14.5,
+      paint: { 'circle-radius': radiusExpr(1), 'circle-color': ['get', 'color'], 'circle-opacity': ['case', ['get', 'known'], 0.34, 0.12],
+        'circle-blur': 0.25, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': ['case', ['get', 'known'], 2, 1],
+        'circle-stroke-opacity': ['case', ['get', 'known'], 0.9, 0.35], 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'map' } });
+    add({ id: 'lot-label', type: 'symbol', source: 'lots', minzoom: 15.6,
+      layout: { 'text-field': 'P', 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 15.6, 10, 18, 17],
+        'text-allow-overlap': true, 'text-ignore-placement': true },
+      paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#0a0e15', 'text-halo-width': 1.4, 'text-opacity': ['case', ['get', 'known'], 1, 0.55] } });
+    add({ id: 'jam-glow', type: 'line', source: 'jams', layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': ['get', 'color'], 'line-width': zoomLin(13, 6, 18, 36), 'line-blur': zoomLin(13, 3, 18, 18), 'line-opacity': 0.5 } });
+    add({ id: 'jam-core', type: 'line', source: 'jams', layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': ['get', 'color'], 'line-width': zoomLin(13, 2.2, 18, 7), 'line-opacity': 0.95 } });
+  }
+
+  // ลานจอด: สะสมจากไทล์ที่โหลดมาแล้ว (ยิ่งเลื่อนแผนที่ยิ่งเจอครบ)
+  const lotCache = new Map();
+  function harvestLots() {
+    if (!map.getSource(VSRC)) return false;
+    let added = false;
+    try {
+      map.querySourceFeatures(VSRC, { sourceLayer: 'poi', filter: ['==', ['get', 'class'], 'parking'] }).forEach((f) => {
+        if (!f.geometry || f.geometry.type !== 'Point') return;
+        const c = f.geometry.coordinates;
+        if (distKm(c, TU_CENTER) > MAX_DIST_KM) return;
+        const k = c[0].toFixed(4) + ',' + c[1].toFixed(4);
+        if (!lotCache.has(k)) { lotCache.set(k, { c, name: (f.properties && f.properties.name) || '' }); added = true; }
+      });
+    } catch (e) { /* ignore */ }
+    return added;
+  }
+
+  // ตัดเฉพาะช่วงถนนที่อยู่ใกล้จุดรายงานรถติด
+  function lineParts(g) {
+    if (!g) return [];
+    if (g.type === 'LineString') return [g.coordinates];
+    if (g.type === 'MultiLineString') return g.coordinates;
+    return [];
+  }
+  function densify(line, stepKm) {
+    const out = [];
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i], b = line[i + 1];
+      const n = Math.max(1, Math.ceil(distKm(a, b) / stepKm));
+      for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    if (line.length) out.push(line[line.length - 1]);
+    return out;
+  }
+  let jamPending = false, lastJamTry = 0;
+  function buildJams() {
+    const act = reports().filter((r) => isActive(r) && TRAFFIC_CATS.includes(catOf(r).key));
+    jamPending = false;
+    if (!act.length || !map.getSource(VSRC)) return [];
+    let roads = [];
+    try {
+      roads = map.querySourceFeatures(VSRC, { sourceLayer: 'transportation',
+        filter: ['in', ['get', 'class'], ['literal', ['minor', 'tertiary', 'secondary', 'primary', 'trunk', 'service']]] });
+    } catch (e) { /* ignore */ }
+    const out = [], seen = new Set();
+    act.forEach((r) => {
+      const p = [r.lng, r.lat];
+      const L = levelOf(r);
+      const color = L ? L.color : catOf(r).color;
+      const reach = 0.06 + 0.05 * (r.level || 1);            // ยิ่งติดหนัก เส้นสียิ่งยาว
+      let found = false;
+      // หาเส้นถนนที่อยู่ใกล้จุดรายงานที่สุด แล้วระบายสีเฉพาะเส้นนั้น (ไม่ลามไปซอยข้าง ๆ)
+      const cand = [];
+      roads.forEach((f) => {
+        if (f.properties && (f.properties.service === 'parking_aisle' || f.properties.service === 'driveway')) return;
+        lineParts(f.geometry).forEach((line) => {
+          if (!line.some((c) => distKm(c, p) < 0.6)) return;
+          const pts = densify(line, 0.008);
+          const d = Math.min(...pts.map((c) => distKm(c, p)));
+          if (d <= 0.045) cand.push({ pts, d });
+        });
+      });
+      const best = cand.length ? Math.min(...cand.map((x) => x.d)) : 0;
+      cand.filter((x) => x.d <= best + 0.006).forEach(({ pts }) => {
+          let seg = [];
+          const flush = () => {
+            if (seg.length > 1) {
+              const key = seg[0].map((x) => x.toFixed(5)).join() + seg.length;
+              if (!seen.has(key)) { seen.add(key); out.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: seg }, properties: { color } }); found = true; }
+            }
+            seg = [];
+          };
+          pts.forEach((c) => { if (distKm(c, p) <= reach) seg.push(c); else flush(); });
+          flush();
+      });
+      if (!found) jamPending = true;   // ไทล์ถนนแถวนั้นยังไม่โหลด ลองใหม่ตอนแผนที่นิ่ง
+    });
+    return out;
+  }
+
+  function refreshCampus() {
+    if (!map.getSource('lots')) return;
+    harvestLots();
+    const now = Date.now();
+    const all = reports();
+    // จุดเคยเกิดเหตุ 7 วัน (ที่ไม่ได้กำลังเกิดอยู่)
+    map.getSource('history').setData({ type: 'FeatureCollection', features: all
+      .filter((r) => now - r.time <= 7 * DAY && !isActive(r))
+      .map((r) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { color: catOf(r).color, r: 26 } })) });
+    // ลานจอด: สีตามรายงานที่จอดรถล่าสุดในระยะ 90 ม.
+    const park = all.filter((r) => catOf(r).key === 'parking' && isActive(r)).sort((a, b) => b.time - a.time);
+    map.getSource('lots').setData({ type: 'FeatureCollection', features: [...lotCache.values()].map((l) => {
+      const hit = park.find((r) => distKm([r.lng, r.lat], l.c) <= 0.09);
+      const L = hit ? levelOf(hit) : null;
+      return { type: 'Feature', geometry: { type: 'Point', coordinates: l.c },
+        properties: { color: L ? L.color : NO_DATA, known: !!L, r: 15 } };
+    }) });
+    map.getSource('jams').setData({ type: 'FeatureCollection', features: buildJams() });
+    lastJamTry = now;
+  }
+  // เมื่อไทล์ใหม่โหลดเสร็จ: เก็บลานจอดเพิ่ม และลองวาดถนนรถติดที่ยังค้าง
+  map.on('idle', () => {
+    if (!map.getSource('lots')) return;
+    const more = harvestLots();
+    if (more || (jamPending && Date.now() - lastJamTry > 4000)) refreshCampus();
+  });
 
   /* ---------- หมุด (DOM marker + popup) ---------- */
   const markers = new Map();   // id -> { marker, el, key }
@@ -1657,6 +1855,71 @@
     renderWeather();
   }
 
+  /* ---------- บรรยากาศบนแผนที่ตามสภาพอากาศจริง ---------- */
+  let skyState = '', rainOn = false, flashTimer = null;
+  function skyMode() {
+    if (!weather) return '';
+    const c = weather.code;
+    const next3 = weather.hours.slice(0, 3);
+    const pmax = next3.length ? Math.max(...next3.map((h) => h.p)) : 0;
+    if (c >= 95) return 'storm';
+    if (weather.precip > 0.05 || (c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return 'rain';
+    if (pmax >= 50) return 'soon';
+    if (c >= 2 || pmax >= 30) return 'cloudy';
+    return 'clear';
+  }
+  function applySky() {
+    const mode = skyMode();
+    const h = new Date().getHours();
+    const tod = h >= 6 && h < 18 ? 'day' : 'night';
+    const key = mode + tod;
+    if (key === skyState) return;
+    skyState = key;
+    const sky = $('sky');
+    sky.className = 'sky' + (mode ? ' on ' + mode + ' ' + tod : '');
+    rainOn = (mode === 'rain' || mode === 'storm') && !reduceMotion;
+    if (rainOn) startRain(mode === 'storm' ? 1 : Math.min(1, 0.45 + weather.precip / 6));
+    clearInterval(flashTimer);
+    if (mode === 'storm' && !reduceMotion) flashTimer = setInterval(() => {
+      if (Math.random() < 0.5 || document.hidden) return;
+      const f = sky.querySelector('.flash');
+      f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+    }, 6000);
+  }
+  let rainLoop = 0;
+  function startRain(intensity) {
+    const cv = $('rainFx');
+    const ctx = cv.getContext('2d');
+    const loop = ++rainLoop;
+    let W = 0, H = 0, drops = [], last = 0;
+    function size() {
+      const dpr = Math.min(window.devicePixelRatio || 1, LITE ? 1 : 2);
+      W = cv.clientWidth; H = cv.clientHeight;
+      cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const n = Math.round((W / (LITE ? 14 : 8)) * intensity);
+      drops = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, l: 10 + Math.random() * 18, v: 9 + Math.random() * 9, a: 0.08 + Math.random() * 0.18 }));
+    }
+    size();
+    window.addEventListener('resize', size);
+    (function frame(t) {
+      if (loop !== rainLoop) return;
+      if (!rainOn) { ctx.clearRect(0, 0, W, H); window.removeEventListener('resize', size); return; }
+      requestAnimationFrame(frame);
+      if (document.hidden || t - last < (LITE ? 33 : 16)) return;
+      last = t;
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
+      for (const d of drops) {
+        ctx.strokeStyle = 'rgba(186,230,253,' + d.a + ')';
+        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.l * 0.18, d.y + d.l); ctx.stroke();
+        d.y += d.v; d.x -= d.v * 0.18;
+        if (d.y > H) { d.y = -20; d.x = Math.random() * (W + 60); }
+      }
+    })(0);
+  }
+  setInterval(() => { skyState = ''; applySky(); }, 10 * 60000);   // เปลี่ยนกลางวัน/กลางคืน
+
   // คะแนนความเสี่ยงแบบง่าย: โอกาสฝน 3 ชม. + ปริมาณฝน + จำนวนจุดน้ำขังตอนนี้
   function riskScore() {
     const h = weather ? weather.hours.slice(0, 3) : [];
@@ -1668,6 +1931,7 @@
 
   function renderWeather() {
     const el = $('weather');
+    applySky();
     if (weather === null) return;
     const score = riskScore();
     const risk = score < 0.3 ? ['ต่ำ', '#34d399'] : score < 0.6 ? ['ปานกลาง', '#facc15'] : ['สูง', '#f43f5e'];
