@@ -42,7 +42,7 @@
   html.lite .vignette{display:none;}
   html.lite .pin{filter:none;}
   html.lite .pin-body{box-shadow:0 4px 8px rgba(0,0,0,0.45);}
-  html.lite .pin.live::before, html.lite .fab::before, html.lite .kpi::after{animation:none; display:none;}
+  html.lite .fab::before, html.lite .kpi::after{animation:none; display:none;}
   html.lite .alert.hot .alert-ic{animation:none;}
 
   /* ---------- Splash ---------- */
@@ -387,6 +387,52 @@
   .park-row span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .park-row b{color:var(--c); font-weight:600; font-size:12px;}
   .park-row small{color:var(--ink-3); font-size:11px; margin-left:4px;}
+
+  /* ---------- หมุดเคลื่อนไหวตามประเภท ---------- */
+  .pin.live.cat-flood::after{content:""; position:absolute; left:50%; bottom:-6px; width:16px; height:16px; margin-left:-8px; border-radius:50%;
+    border:2px solid var(--c); background:none; animation:pinpulse 2s ease-out 1s infinite;}
+  .pin.live:not(.cat-flood)::before{left:-9px; top:-9px; bottom:auto; width:54px; height:54px; margin:0; border:none;
+    background:radial-gradient(circle, color-mix(in srgb, var(--c) 75%, transparent) 0%, transparent 65%);}
+  .pin.live.cat-traffic::before, .pin.live.cat-accident::before{animation:siren .9s steps(2, jump-none) infinite;}
+  .pin.live.cat-traffic::before{background:radial-gradient(circle, rgba(251,146,60,0.85) 0%, transparent 65%);}
+  .pin.live.cat-accident::before{background:radial-gradient(circle, rgba(244,63,94,0.85) 0%, transparent 65%);}
+  .pin.live.cat-parking::before{animation:breathe 2.6s ease-in-out infinite;}
+  .pin.live.cat-blocking::before{animation:breathe 1.4s ease-in-out infinite;}
+  @keyframes siren{ 0%{opacity:.95; transform:scale(1);} 100%{opacity:.15; transform:scale(.8);} }
+  @keyframes breathe{ 0%,100%{opacity:.25; transform:scale(.75);} 50%{opacity:.9; transform:scale(1.05);} }
+  .pin.drop{animation:pinDrop .9s cubic-bezier(.3,1.5,.5,1) both;}
+  @keyframes pinDrop{ 0%{transform:translateY(-70px) scale(.6); opacity:0;} 60%{opacity:1;} 100%{transform:none; opacity:1;} }
+
+  /* ---------- การ์ดรายงานที่มีรูป: รูปเต็มความกว้าง ---------- */
+  .fcard.has-img{flex-direction:column; gap:10px;}
+  .fcard.has-img .thumb{width:100%; height:auto; aspect-ratio:16/9; max-height:210px; border-radius:12px; position:relative;}
+  .fcard.has-img .thumb img{transition:transform .5s ease;}
+  .fcard.has-img:hover .thumb img{transform:scale(1.04);}
+  .img-tag{position:absolute; left:8px; top:8px; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px;
+    font-size:11px; font-weight:600; color:#fff; background:rgba(4,8,14,0.72); border:1px solid color-mix(in srgb, var(--c) 60%, transparent);}
+  .img-tag .ico{color:var(--c);}
+  .fcard.has-img::before{top:12px; bottom:auto; height:40px;}
+
+  /* ---------- ฉลองตอนส่งรายงานสำเร็จ ---------- */
+  .celebrate{position:fixed; inset:0; z-index:65; display:grid; place-items:center; pointer-events:auto; background:rgba(3,6,10,0.45); animation:fade .25s;}
+  .celebrate.out{opacity:0; transition:opacity .35s;}
+  .cel-card{position:relative; text-align:center; padding:28px 30px 22px; border-radius:26px; max-width:300px; background:var(--glass-solid, #0c121d);
+    border:1px solid rgba(56,225,255,0.35); box-shadow:0 30px 70px -20px rgba(0,0,0,0.8); animation:celPop .55s cubic-bezier(.3,1.5,.5,1) both;}
+  @keyframes celPop{ from{transform:scale(.6); opacity:0;} }
+  .cel-ring{position:relative; width:84px; height:84px; margin:0 auto 14px; border-radius:50%; display:grid; place-items:center; background:var(--c);
+    box-shadow:0 0 0 0 var(--c); color:#06111b;}
+  .cel-ring::before, .cel-ring::after{content:""; position:absolute; inset:0; border-radius:50%; border:2px solid var(--c); animation:celWave 1.6s ease-out infinite;}
+  .cel-ring::after{animation-delay:.5s;}
+  @keyframes celWave{ from{transform:scale(1); opacity:.9;} to{transform:scale(2.1); opacity:0;} }
+  .cel-ring svg path{stroke-dasharray:30; stroke-dashoffset:30; animation:draw .5s .35s ease-out forwards;}
+  @keyframes draw{ to{stroke-dashoffset:0;} }
+  .cel-card h3{font-size:19px; margin:0 0 6px;}
+  .cel-card p{margin:0; font-size:13px; color:var(--ink-2); line-height:1.55;}
+  .cel-card b.n{color:var(--c);}
+  .spark{position:absolute; left:50%; top:70px; width:8px; height:8px; margin:-4px; border-radius:50%; background:var(--sc);
+    animation:spark 1s cubic-bezier(.2,.8,.3,1) forwards;}
+  @keyframes spark{ from{transform:translate(0,0) scale(1); opacity:1;} to{transform:translate(var(--dx), var(--dy)) scale(.3); opacity:0;} }
+  @media (prefers-reduced-motion: reduce){ .spark, .cel-ring::before, .cel-ring::after{display:none;} }
 </style>
 </head>
 <body data-sheet="peek">
@@ -1068,13 +1114,13 @@
       (r.confirms > 0 ? `<span class="pin-badge">${r.confirms}</span>` : '');
   }
   function stylePin(el, r) {
-    el.className = 'pin' + (isActive(r) ? ' live' : '') + (isStale(r) ? ' stale' : '');
+    el.className = 'pin cat-' + catOf(r).key + (isActive(r) ? ' live' : '') + (isStale(r) ? ' stale' : '');
     el.style.setProperty('--c', colorOf(r));
     el.setAttribute('aria-label', r.place + ' — ' + catOf(r).label + ' ' + (isCleared(r) ? catOf(r).clearLabel : (levelOf(r) ? levelOf(r).label : '')));
     el.innerHTML = pinHtml(r);
   }
 
-  function renderPins() {
+  function renderPins(fresh) {
     const seen = new Set();
     reports().forEach((r) => {
       if (!isVisible(r)) return;
@@ -1087,6 +1133,10 @@
         const el = document.createElement('div');
         outer.appendChild(el);
         stylePin(el, r);
+        if (fresh && fresh.has(r.id) && !reduceMotion) {
+          el.classList.add('drop');
+          setTimeout(() => el.classList.remove('drop'), 1000);
+        }
         const popup = new maplibregl.Popup({ offset: 44, maxWidth: '320px', className: 'fw-popup', focusAfterOpen: false });
         popup.on('open', () => popup.setHTML(popupHtml(byId.get(r.id))));
         const marker = new maplibregl.Marker({ element: outer, anchor: 'bottom' }).setLngLat([r.lng, r.lat]).setPopup(popup).addTo(map);
@@ -1416,9 +1466,9 @@
   }
 
   function cardHtml(r, isNew) {
-    return `<article class="fcard${isStale(r) ? ' stale' : ''}${isNew ? ' enter' : ''}" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}" tabindex="0" aria-label="ดู ${esc(r.place)} บนแผนที่">
+    return `<article class="fcard${r.image ? ' has-img' : ''}${isStale(r) ? ' stale' : ''}${isNew ? ' enter' : ''}" style="--c:${colorOf(r)}" data-focus="${esc(r.id)}" tabindex="0" aria-label="ดู ${esc(r.place)} บนแผนที่">
       ${r.image
-        ? `<button type="button" class="thumb" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="" loading="lazy"></button>`
+        ? `<button type="button" class="thumb" data-zoom="${esc(r.id)}" aria-label="ดูรูปขนาดใหญ่"><img src="${esc(r.image)}" alt="" loading="lazy"><span class="img-tag" style="--c:${catOf(r).color}">${icon(catOf(r).icon, 12)}${catOf(r).label}</span></button>`
         : `<div class="thumb empty">${icon(isCleared(r) ? 'check' : catOf(r).icon, 24)}</div>`}
       <div class="fbody">
         <div class="ftop"><h3>${esc(r.place)}</h3>${r.pending ? '<span class="ftime">กำลังส่ง…</span>' : `<span class="ftime" data-ts="${r.time}">${timeAgo(r.time)}</span>`}</div>
@@ -1519,7 +1569,7 @@
   }
 
   function renderAll(fresh) {
-    renderPins();
+    renderPins(fresh);
     renderMapData();
     renderFeed(fresh);
     renderKPI();
@@ -1839,6 +1889,7 @@
         : 'ส่งรายงานสำเร็จ ขอบคุณที่ช่วยกันแจ้งข้อมูล', res === TIMEOUT ? 6000 : 3500);
       closeDialog();
       map.flyTo({ center: [doc.lng, doc.lat], zoom: 17.5, pitch: is3D ? 55 : 0, duration: 1400 });
+      if (res !== TIMEOUT) celebrate(doc.cat);
       resetForm();
     } catch (err) {
       console.error('ส่งรายงานไม่สำเร็จ:', err);
@@ -1851,6 +1902,27 @@
     }
   }
   $('submitBtn').addEventListener('click', submitReport);
+
+  function celebrate(cat) {
+    const C = CATS[cat] || CATS.flood;
+    const total = liveReports.length + 1;
+    const el = document.createElement('div');
+    el.className = 'celebrate';
+    const colors = ['#38e1ff', '#34d399', '#facc15', '#fb923c', '#a78bfa', C.color];
+    const sparks = reduceMotion ? '' : Array.from({ length: 14 }, (_, i) => {
+      const a = (i / 14) * Math.PI * 2, d = 70 + Math.random() * 50;
+      return `<i class="spark" style="--sc:${colors[i % colors.length]}; --dx:${Math.round(Math.cos(a) * d)}px; --dy:${Math.round(Math.sin(a) * d)}px"></i>`;
+    }).join('');
+    el.innerHTML = `<div class="cel-card" style="--c:${C.color}">${sparks}
+      <div class="cel-ring"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <h3>ขอบคุณที่ช่วยแจ้ง!</h3>
+      <p>รายงาน${esc(C.label)}ของคุณขึ้นบนแผนที่แล้ว<br>ชาว มธ. ช่วยกันรายงานไปแล้ว <b class="n">${total}</b> จุด</p>
+    </div>`;
+    document.body.appendChild(el);
+    const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); };
+    el.addEventListener('click', close);
+    setTimeout(close, 2600);
+  }
 
   /* ---------- ยืนยัน / น้ำลดแล้ว ---------- */
   function refreshViews() {
